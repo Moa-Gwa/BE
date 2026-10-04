@@ -11,3 +11,7 @@ spring:
 moagwa:
   cors:
     allowed-origins: http://localhost:3000
+
+crawler:
+  enabled: false
+  retry-delay: PT0S
