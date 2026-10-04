@@ -14,3 +14,13 @@ spring:
 moagwa:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+crawler:
+  enabled: true
+  interval: PT10M
+  initial-delay: PT30S
+  concurrent-limit: 5
+  request-timeout: PT10S
+  max-retries: 3
+  retry-delay: PT2S
+  detail-retry-batch: 20
