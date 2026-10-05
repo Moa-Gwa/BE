@@ -275,6 +275,87 @@ class ApiIntegrationTest {
         mvc.perform(get("/api/notices/" + id)).andExpect(status().isOk());
     }
 
+    private static Map<String, Object> text(String t) {
+        return Map.of("type", "TEXT", "text", t);
+    }
+
+    private static Map<String, Object> images(String layout, String... urls) {
+        return Map.of("type", "IMAGES", "layout", layout, "images", List.of(urls));
+    }
+
+    @Test
+    void blogStyleBodyKeepsBlockOrderAndLayoutAndDerivesSummaryFields() throws Exception {
+        List<Map<String, Object>> blocks = List.of(
+                text("첫 문단입니다"), images("CAROUSEL", "/uploads/a.png", "/uploads/b.png"),
+                text("둘째 문단"), images("STACK", "https://example.com/c.jpg"));
+        long id = createNotice(admin, Map.of("title", "블록 " + tag, "blocks", blocks)).get("id").asLong();
+
+        mvc.perform(get("/api/notices/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocks.length()").value(4))
+                .andExpect(jsonPath("$.blocks[0].type").value("TEXT"))
+                .andExpect(jsonPath("$.blocks[1].layout").value("CAROUSEL"))
+                .andExpect(jsonPath("$.blocks[1].images.length()").value(2))
+                .andExpect(jsonPath("$.blocks[3].layout").value("STACK"))
+                .andExpect(jsonPath("$.description").value("첫 문단입니다\n\n둘째 문단"))
+                .andExpect(jsonPath("$.images.length()").value(3));
+        mvc.perform(get("/api/feed").param("q", tag))
+                .andExpect(jsonPath("$.items[0].thumbnail").value("/uploads/a.png"));
+        mvc.perform(get("/api/notices/" + id + "x")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void plainBodyNoticesStillWorkWithoutBlocks() throws Exception {
+        long id = createNotice(admin, Map.of("title", "예전방식 " + tag, "description", "그냥 본문",
+                "imageUrls", List.of("/uploads/x.png"))).get("id").asLong();
+        mvc.perform(get("/api/notices/" + id))
+                .andExpect(jsonPath("$.description").value("그냥 본문"))
+                .andExpect(jsonPath("$.blocks").doesNotExist())
+                .andExpect(jsonPath("$.images[0]").value("/uploads/x.png"));
+    }
+
+    @Test
+    void blockValidationRejectsTooManyImagesBadUrlsAndEmptyBodies() throws Exception {
+        String[] eleven = new String[11];
+        java.util.Arrays.fill(eleven, "/uploads/a.png");
+        String[] six = new String[6];
+        java.util.Arrays.fill(six, "/uploads/a.png");
+        // 6 + 6 images across two groups exceeds the 10-image cap even though each group is allowed
+        assertBlocksRejected(List.of(text("본문"), images("STACK", six), images("CAROUSEL", six)));
+        assertBlocksRejected(List.of(text("본문"), images("STACK", eleven)));
+        assertBlocksRejected(List.of(text("본문"), images("STACK", "javascript:alert(1)")));
+        assertBlocksRejected(List.of(text("본문"), images("STACK", "http://insecure.example.com/a.png")));
+        assertBlocksRejected(List.of(text("   "), images("STACK", "/uploads/a.png"))); // no text at all
+        assertBlocksRejected(List.of(Map.of("type", "VIDEO", "text", "x")));
+    }
+
+    private void assertBlocksRejected(List<Map<String, Object>> blocks) throws Exception {
+        mvc.perform(post("/api/admin/notices").header("Authorization", adminToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("title", "t", "categoryIds", List.of(1),
+                                "blocks", blocks))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void editingAndDuplicatingKeepTheBlockBody() throws Exception {
+        long id = createNotice(admin, Map.of("title", "원본 " + tag,
+                "blocks", List.of(text("글"), images("STACK", "/uploads/a.png")))).get("id").asLong();
+
+        mvc.perform(put("/api/admin/notices/" + id).header("Authorization", adminToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("title", "수정 " + tag, "categoryIds", List.of(1),
+                                "blocks", List.of(images("CAROUSEL", "/uploads/a.png", "/uploads/b.png"),
+                                        text("수정된 글"))))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocks[0].layout").value("CAROUSEL"))
+                .andExpect(jsonPath("$.description").value("수정된 글"));
+        mvc.perform(post("/api/admin/notices/" + id + "/duplicate").header("Authorization", adminToken(admin)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.blocks.length()").value(2))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
+    }
+
     @Test
     void dashboardCountsOnlyOwnOrganizationsNotices() throws Exception {
         createNotice(admin, Map.of("title", "진행 " + tag, "deadlineAt", Instant.now().plus(Duration.ofHours(3)).toString()));

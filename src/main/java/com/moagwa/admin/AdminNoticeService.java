@@ -6,6 +6,8 @@ import com.moagwa.notice.Category;
 import com.moagwa.notice.CategoryRepository;
 import com.moagwa.notice.DisplayStatus;
 import com.moagwa.notice.Notice;
+import com.moagwa.notice.NoticeBlock;
+import com.moagwa.notice.NoticeBlockCodec;
 import com.moagwa.notice.NoticeImage;
 import com.moagwa.notice.NoticeRepository;
 import com.moagwa.notice.NoticeStatus;
@@ -34,8 +36,11 @@ public class AdminNoticeService {
     private final OrganizationRepository organizations;
     private final CategoryRepository categories;
     private final NotificationService notifications;
+    private final NoticeBlockCodec blockCodec;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+
+    private static final int MAX_IMAGES = 10;
 
     @Transactional(readOnly = true)
     public List<AdminNoticeView> list(CurrentUser me, String tab, String q) {
@@ -113,7 +118,8 @@ public class AdminNoticeService {
         String title = src.getTitle().length() > 33 ? src.getTitle().substring(0, 33) : src.getTitle();
         copy.edit(title + " (복사)", src.getDescription(), new HashSet<>(src.getCategories()),
                 src.getImages().stream().map(NoticeImage::getUrl).toList(), src.getEventStartAt(),
-                src.getEventEndAt(), src.getDeadlineAt(), src.getLocation(), src.getExternalLink(), src.isUrgent());
+                src.getEventEndAt(), src.getDeadlineAt(), src.getLocation(), src.getExternalLink(), src.isUrgent(),
+                src.getContentBlocks());
         return view(notices.save(copy), clock.instant());
     }
 
@@ -167,9 +173,45 @@ public class AdminNoticeService {
         if (found.size() != new HashSet<>(req.categoryIds()).size()) {
             throw ApiException.badRequest("존재하지 않는 카테고리가 포함되어 있습니다.");
         }
-        n.edit(req.title().trim(), req.description(), new HashSet<>(found),
-                req.imageUrls() == null ? List.of() : req.imageUrls(), req.eventStartAt(), req.eventEndAt(),
-                req.deadlineAt(), blankToNull(req.location()), blankToNull(req.externalLink()), req.urgent());
+        String description;
+        List<String> images;
+        String blocksJson = null;
+        if (req.blocks() != null && !req.blocks().isEmpty()) {
+            List<NoticeBlock> blocks = normalize(req.blocks());
+            description = blocks.stream().filter(b -> NoticeBlock.TEXT.equals(b.type())).map(NoticeBlock::text)
+                    .collect(java.util.stream.Collectors.joining("\n\n"));
+            images = blocks.stream().filter(b -> NoticeBlock.IMAGES.equals(b.type()))
+                    .flatMap(b -> b.images().stream()).toList();
+            blocksJson = blockCodec.toJson(blocks);
+        } else {
+            description = req.description() == null ? "" : req.description();
+            images = req.imageUrls() == null ? List.of() : req.imageUrls();
+        }
+        if (description.isBlank()) {
+            throw ApiException.badRequest("본문을 입력해 주세요.");
+        }
+        if (images.size() > MAX_IMAGES) {
+            throw ApiException.badRequest("이미지는 공지당 최대 " + MAX_IMAGES + "장까지 넣을 수 있습니다.");
+        }
+        n.edit(req.title().trim(), description, new HashSet<>(found), images, req.eventStartAt(),
+                req.eventEndAt(), req.deadlineAt(), blankToNull(req.location()), blankToNull(req.externalLink()),
+                req.urgent(), blocksJson);
+    }
+
+    /** Drops empty blocks and fills defaults so stored bodies are always well-formed. */
+    private static List<NoticeBlock> normalize(List<BlockInput> input) {
+        List<NoticeBlock> out = new java.util.ArrayList<>();
+        for (BlockInput b : input) {
+            if (NoticeBlock.TEXT.equals(b.type())) {
+                if (b.text() != null && !b.text().isBlank()) {
+                    out.add(new NoticeBlock(NoticeBlock.TEXT, b.text(), null, null));
+                }
+            } else if (b.images() != null && !b.images().isEmpty()) {
+                out.add(new NoticeBlock(NoticeBlock.IMAGES, null, List.copyOf(b.images()),
+                        b.layout() == null ? NoticeBlock.CAROUSEL : b.layout()));
+            }
+        }
+        return out;
     }
 
     private void applyMode(Notice n, String mode, Instant publishAt) {
@@ -234,7 +276,8 @@ public class AdminNoticeService {
         return new AdminNoticeView(n.getId(), n.getTitle(), n.getDescription(),
                 n.getCategories().stream().map(Category::getId).sorted().toList(),
                 n.getCategories().stream().map(Category::getCode).sorted().toList(),
-                n.getImages().stream().map(NoticeImage::getUrl).toList(), n.getStatus().name(),
+                n.getImages().stream().map(NoticeImage::getUrl).toList(), blockCodec.fromJson(n.getContentBlocks()),
+                n.getStatus().name(),
                 d == null ? null : d.name(), n.isUrgent(), n.getPublishAt(), n.getEventStartAt(),
                 n.getEventEndAt(), n.getDeadlineAt(), n.getLocation(), n.getExternalLink(), n.getViewCount(),
                 n.getBookmarkCount(), n.getShareCount(), n.getCreatedAt(), n.getUpdatedAt());

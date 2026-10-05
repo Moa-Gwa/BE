@@ -1,5 +1,6 @@
 package com.moagwa.feed;
 
+import com.moagwa.notice.NoticeBlock;
 import java.time.Instant;
 import java.util.List;
 
@@ -13,6 +14,7 @@ public record NoticeDetail(
         String contentHtml,
         List<String> categories,
         List<String> images,
+        List<NoticeBlock> blocks,
         boolean urgent,
         Instant publishedAt,
         Instant updatedAt,

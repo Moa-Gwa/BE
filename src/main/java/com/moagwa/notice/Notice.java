@@ -74,6 +74,9 @@ public class Notice {
     @Column(name = "is_urgent", nullable = false)
     private boolean urgent;
 
+    @Column(name = "content_blocks", columnDefinition = "text")
+    private String contentBlocks;
+
     @Column(name = "view_count", nullable = false)
     private int viewCount;
 
@@ -110,7 +113,7 @@ public class Notice {
     /** Applies the editable fields; used for create and update. */
     public void edit(String title, String description, Set<Category> categories, List<String> imageUrls,
                      Instant eventStartAt, Instant eventEndAt, Instant deadlineAt, String location,
-                     String externalLink, boolean urgent) {
+                     String externalLink, boolean urgent, String contentBlocks) {
         this.title = title;
         this.description = description;
         this.categories.clear();
@@ -125,6 +128,7 @@ public class Notice {
         this.location = location;
         this.externalLink = externalLink;
         this.urgent = urgent;
+        this.contentBlocks = contentBlocks;
         this.updatedAt = Instant.now();
     }
 

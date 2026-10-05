@@ -1,5 +1,6 @@
 package com.moagwa.admin;
 
+import com.moagwa.notice.NoticeBlock;
 import java.time.Instant;
 import java.util.List;
 
@@ -10,6 +11,7 @@ public record AdminNoticeView(
         List<Long> categoryIds,
         List<String> categoryCodes,
         List<String> imageUrls,
+        List<NoticeBlock> blocks,
         String status,
         String displayStatus,
         boolean urgent,

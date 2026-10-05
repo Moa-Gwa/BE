@@ -91,6 +91,6 @@ class DevDataInitializer implements CommandLineRunner {
                                      Instant eventEnd, Instant deadline, String location, boolean urgent,
                                      String mode, Instant publishAt) {
         return new NoticeRequest(title, body, categoryIds, List.of(), eventStart, eventEnd, deadline, location,
-                "", urgent, mode, publishAt);
+                "", urgent, mode, publishAt, null);
     }
 }
