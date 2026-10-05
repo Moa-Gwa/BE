@@ -32,11 +32,30 @@ public class Organization {
 
     private String department;
 
+    @Column(columnDefinition = "text")
+    private String description;
+
+    @Column(name = "profile_image")
+    private String profileImage;
+
+    @Column(name = "external_url")
+    private String externalUrl;
+
     @Column(name = "is_verified", nullable = false)
     private boolean verified;
 
     public Organization(String name, OrganizationType type) {
         this.name = name;
         this.type = type;
+    }
+
+    public void updateInfo(String description, String profileImage, String externalUrl) {
+        this.description = description;
+        this.profileImage = profileImage;
+        this.externalUrl = externalUrl;
+    }
+
+    public void markVerified() {
+        this.verified = true;
     }
 }
