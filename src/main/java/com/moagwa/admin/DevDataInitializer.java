@@ -60,7 +60,7 @@ class DevDataInitializer implements CommandLineRunner {
                 List.of(cat.get("SNACK"), cat.get("WELFARE")), now.plus(Duration.ofDays(1)),
                 now.plus(Duration.ofDays(1).plusHours(3)), now.plus(Duration.ofHours(5)), "1층 로비", false, "NOW",
                 null));
-        notices.create(council, req("[긴급] 중간고사 기간 도서관 운영 변경",
+        notices.create(council, req("[중요] 중간고사 기간 도서관 운영 변경",
                 "중간고사 기간 동안 열람실 운영 시간이 변경됩니다.\n\n24시간 열람실: 본관 3층",
                 List.of(cat.get("ACADEMIC")), now.minus(Duration.ofDays(1)), now.plus(Duration.ofDays(10)), null,
                 "중앙도서관", true, "NOW", null));
