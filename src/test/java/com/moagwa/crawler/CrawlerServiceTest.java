@@ -45,11 +45,13 @@ class CrawlerServiceTest {
 
     @BeforeEach
     void setUp() {
-        notices.deleteAll();
-        sources.deleteAll();
-        organizations.deleteAll();
-        Organization org = organizations.save(new Organization("가톨릭대학교 공지사항", OrganizationType.UNIVERSITY));
-        source = sources.save(new CrawlSource("catholic_notice", org, LIST_URL));
+        sources.findAll().stream().filter(s -> s.getCode().equals("test_source")).forEach(s -> {
+            notices.deleteAll(notices.findAll().stream().filter(n -> n.getSource().getId().equals(s.getId())).toList());
+            sources.delete(s);
+        });
+        Organization org = organizations.findAll().stream().filter(o -> o.getName().equals("테스트 조직")).findFirst()
+                .orElseGet(() -> organizations.save(new Organization("테스트 조직", OrganizationType.UNIVERSITY)));
+        source = sources.save(new CrawlSource("test_source", org, LIST_URL));
     }
 
     @Test
