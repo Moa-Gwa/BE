@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/moagwa
+    username: moagwa
+    password: moagwa
+
+moagwa:
+  jwt:
+    secret: local-dev-only-secret-change-me-0123456789
+  dev-data: true

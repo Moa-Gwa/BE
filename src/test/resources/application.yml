@@ -1,0 +1,19 @@
+spring:
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+moagwa:
+  cors:
+    allowed-origins: http://localhost:3000
+  jwt:
+    secret: test-secret-test-secret-test-secret-test-secret
+  upload:
+    dir: target/test-uploads
+
+crawler:
+  enabled: false
+  retry-delay: PT0S
