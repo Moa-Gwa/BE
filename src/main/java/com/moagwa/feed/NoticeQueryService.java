@@ -4,6 +4,7 @@ import com.moagwa.common.exception.ApiException;
 import com.moagwa.notice.Category;
 import com.moagwa.notice.DisplayStatus;
 import com.moagwa.notice.Notice;
+import com.moagwa.notice.NoticeBlockCodec;
 import com.moagwa.notice.NoticeImage;
 import com.moagwa.notice.NoticeRepository;
 import java.sql.Timestamp;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class NoticeQueryService {
 
     private final NoticeRepository notices;
+    private final NoticeBlockCodec blockCodec;
     private final NamedParameterJdbcTemplate jdbc;
 
     @Transactional(readOnly = true)
@@ -33,7 +35,7 @@ public class NoticeQueryService {
                 n.getTitle(), n.getDescription(), null,
                 n.getCategories().stream().map(Category::getCode).sorted().toList(),
                 n.getImages().stream().map(NoticeImage::getUrl).toList(),
-                n.isUrgent(), n.getPublishAt(), n.getUpdatedAt(), n.getEventStartAt(), n.getEventEndAt(),
+                blockCodec.fromJson(n.getContentBlocks()), n.isUrgent(), n.getPublishAt(), n.getUpdatedAt(), n.getEventStartAt(), n.getEventEndAt(),
                 n.getDeadlineAt(), n.getLocation(), n.getExternalLink(),
                 status == null ? null : status.name(), n.getViewCount(), n.getBookmarkCount(),
                 isBookmarked(viewerId, "MANUAL", id));
@@ -54,7 +56,7 @@ public class NoticeQueryService {
             return new NoticeDetail("CRAWLED", rs.getLong("id"),
                     new FeedItem.Org(rs.getLong("org_id"), rs.getString("org_name"), rs.getString("org_type")),
                     rs.getString("title"), rs.getString("content_text"), rs.getString("content_html"),
-                    category == null ? List.of() : List.of(category), List.of(), false,
+                    category == null ? List.of() : List.of(category), List.of(), null, false,
                     published.toInstant(), published.toInstant(), null, null, null, null, rs.getString("url"),
                     null, rs.getInt("view_count"), 0, false);
         });
@@ -63,7 +65,7 @@ public class NoticeQueryService {
         }
         NoticeDetail d = rows.get(0);
         return new NoticeDetail(d.source(), d.id(), d.organization(), d.title(), d.description(), d.contentHtml(),
-                d.categories(), d.images(), d.urgent(), d.publishedAt(), d.updatedAt(), d.eventStartAt(),
+                d.categories(), d.images(), d.blocks(), d.urgent(), d.publishedAt(), d.updatedAt(), d.eventStartAt(),
                 d.eventEndAt(), d.deadlineAt(), d.location(), d.externalLink(), d.status(), d.viewCount(),
                 d.bookmarkCount(), isBookmarked(viewerId, "CRAWLED", id));
     }
