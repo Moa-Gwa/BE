@@ -276,6 +276,29 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void dashboardCountsOnlyOwnOrganizationsNotices() throws Exception {
+        createNotice(admin, Map.of("title", "진행 " + tag, "deadlineAt", Instant.now().plus(Duration.ofHours(3)).toString()));
+        createNotice(admin, Map.of("title", "초안 " + tag, "publishMode", "DRAFT"));
+        createNotice(otherAdmin, Map.of("title", "남의것 " + tag));
+
+        mvc.perform(get("/api/admin/dashboard").header("Authorization", adminToken(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.organization.name").value("학생회-" + tag))
+                .andExpect(jsonPath("$.kpi.active").value(1))
+                .andExpect(jsonPath("$.performance.notices").value(2))
+                .andExpect(jsonPath("$.activeNotices.length()").value(1))
+                .andExpect(jsonPath("$.activeNotices[0].categoryCodes.length()").value(1));
+    }
+
+    @Test
+    void adminListIncludesCategoriesWithoutLazyLoadingErrors() throws Exception {
+        createNotice(admin, Map.of("title", "목록 " + tag));
+        mvc.perform(get("/api/admin/notices").header("Authorization", adminToken(admin)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].categoryCodes.length()").value(1));
+        mvc.perform(get("/api/admin/schedule").header("Authorization", adminToken(admin))).andExpect(status().isOk());
+    }
+
+    @Test
     void scheduleEndpointListsEventsAndDeadlinesInRange() throws Exception {
         Instant event = Instant.now().plus(Duration.ofDays(3));
         createNotice(admin, Map.of("title", "일정공지 " + tag, "eventStartAt", event.toString(),

@@ -125,6 +125,33 @@ public class AdminNoticeService {
         return due.size();
     }
 
+    public record DashboardData(long active, long closingToday, long scheduled, long ended, int notices,
+                                long views, long bookmarks, long shares, List<AdminNoticeView> activeNotices) {
+    }
+
+    @Transactional(readOnly = true)
+    public DashboardData dashboard(CurrentUser me) {
+        Instant now = clock.instant();
+        java.time.ZoneId kst = java.time.ZoneId.of("Asia/Seoul");
+        java.time.LocalDate today = now.atZone(kst).toLocalDate();
+        List<Notice> all = organizationNotices(me);
+        List<Notice> active = all.stream().filter(n -> n.getStatus() == NoticeStatus.PUBLISHED).filter(n -> {
+            DisplayStatus d = n.displayStatus(now);
+            return d != DisplayStatus.CLOSED && d != DisplayStatus.ENDED;
+        }).toList();
+        long closingToday = active.stream().filter(n -> n.getDeadlineAt() != null
+                && n.getDeadlineAt().atZone(kst).toLocalDate().equals(today)).count();
+        long scheduled = all.stream().filter(n -> n.getStatus() == NoticeStatus.SCHEDULED).count();
+        long ended = all.stream().filter(n -> n.getStatus() == NoticeStatus.CLOSED
+                || (n.getStatus() == NoticeStatus.PUBLISHED && !active.contains(n))).count();
+        return new DashboardData(active.size(), closingToday, scheduled, ended, all.size(),
+                all.stream().mapToInt(Notice::getViewCount).sum(),
+                all.stream().mapToInt(Notice::getBookmarkCount).sum(),
+                all.stream().mapToInt(Notice::getShareCount).sum(),
+                active.stream().sorted(Comparator.comparing(Notice::getUpdatedAt).reversed()).limit(5)
+                        .map(n -> view(n, now)).toList());
+    }
+
     @Transactional(readOnly = true)
     public List<Notice> organizationNotices(CurrentUser me) {
         return notices.findAllActiveByOrganization(me.organizationId());

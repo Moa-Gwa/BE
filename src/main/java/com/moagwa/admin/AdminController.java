@@ -98,28 +98,13 @@ class AdminController {
     @GetMapping("/dashboard")
     Dashboard dashboard(Authentication auth) {
         CurrentUser me = CurrentUser.from(auth);
-        Instant now = clock.instant();
-        LocalDate today = now.atZone(KST).toLocalDate();
-        List<Notice> all = service.organizationNotices(me);
-        List<Notice> published = all.stream().filter(n -> n.getStatus() == NoticeStatus.PUBLISHED).toList();
-        List<Notice> active = published.stream().filter(n -> {
-            DisplayStatus d = n.displayStatus(now);
-            return d != DisplayStatus.CLOSED && d != DisplayStatus.ENDED;
-        }).toList();
-        long closingToday = active.stream().filter(n -> n.getDeadlineAt() != null
-                && n.getDeadlineAt().atZone(KST).toLocalDate().equals(today)).count();
-        long scheduled = all.stream().filter(n -> n.getStatus() == NoticeStatus.SCHEDULED).count();
-        long ended = all.stream().filter(n -> n.getStatus() == NoticeStatus.CLOSED
-                || (n.getStatus() == NoticeStatus.PUBLISHED && !active.contains(n))).count();
+        AdminNoticeService.DashboardData d = service.dashboard(me);
         Organization org = organizations.findById(me.organizationId()).orElseThrow();
         return new Dashboard(
                 new OrgSummary(org.getId(), org.getName(), org.getType().name()),
-                new Kpi(active.size(), closingToday, scheduled, ended),
-                new Performance(all.size(), all.stream().mapToInt(Notice::getViewCount).sum(),
-                        all.stream().mapToInt(Notice::getBookmarkCount).sum(),
-                        all.stream().mapToInt(Notice::getShareCount).sum()),
-                active.stream().sorted(Comparator.comparing(Notice::getUpdatedAt).reversed()).limit(5)
-                        .map(n -> service.view(n, now)).toList());
+                new Kpi(d.active(), d.closingToday(), d.scheduled(), d.ended()),
+                new Performance(d.notices(), d.views(), d.bookmarks(), d.shares()),
+                d.activeNotices());
     }
 
     @GetMapping("/schedule")
