@@ -55,9 +55,20 @@ public class BoardParser {
                     title,
                     articleUrl(source.getListUrl(), articleNo),
                     parseDate(row.selectFirst(source.getDateSelector())),
-                    row.hasClass("b-cate-notice")));
+                    row.hasClass("b-cate-notice"),
+                    boardCategory(row)));
         }
         return new ArrayList<>(items.values());
+    }
+
+    /** The board's category label shown in the row (".b-cate"), when the board has one. */
+    private static String boardCategory(Element row) {
+        Element cate = row.selectFirst(".b-cate");
+        if (cate == null) {
+            return null;
+        }
+        String label = normalize(cate.text());
+        return label.isEmpty() ? null : label;
     }
 
     /** Returns the sanitized article body, or empty when the body element is missing. */

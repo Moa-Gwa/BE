@@ -74,6 +74,13 @@ public class CrawledNotice {
         this.crawledAt = crawledAt;
     }
 
+    /** Sets the category from the board's own label; never overwrites one that is already set. */
+    public void assignCategory(String code) {
+        if (code != null && this.category == null) {
+            this.category = code;
+        }
+    }
+
     public void applyContent(String html, String text) {
         this.contentHtml = html;
         this.contentText = text;
