@@ -35,6 +35,7 @@ class BoardParserTest {
         assertThat(first.url()).isEqualTo(LIST_URL + "?mode=view&articleNo=276455");
         assertThat(first.publishedDate()).isEqualTo(LocalDate.of(2026, 10, 2));
         assertThat(first.pinned()).isTrue();
+        assertThat(first.category()).isEqualTo("일반");
         assertThat(items.get(2).pinned()).isFalse();
     }
 

@@ -92,6 +92,7 @@ public class CrawlerService {
                 items.stream().map(ListItem::externalId).toList());
         List<ListItem> fresh = new ArrayList<>(items.stream().filter(i -> !existing.contains(i.externalId())).toList());
         java.util.Collections.reverse(fresh); // oldest first so events arrive in publish order
+        backfillCategories(source, items, existing);
 
         int created = 0;
         for (ListItem item : fresh) {
@@ -102,6 +103,7 @@ public class CrawlerService {
             Optional<DetailContent> content = fetchDetail(source, item.url());
             CrawledNotice notice = new CrawledNotice(source, item.externalId(), item.title(), item.url(),
                     item.pinned(), publishedAt, now);
+            notice.assignCategory(BoardCategoryMapper.toCode(item.category()));
             try {
                 CrawledNotice saved = persistence.saveNew(notice, content.orElse(null));
                 created++;
@@ -114,6 +116,18 @@ public class CrawlerService {
             }
         }
         return created;
+    }
+
+    /** Rows that were stored before category parsing existed get their category on the next run. */
+    private void backfillCategories(CrawlSource source, List<ListItem> items, Set<String> existing) {
+        java.util.Map<String, List<String>> byCode = new java.util.HashMap<>();
+        for (ListItem item : items) {
+            String code = BoardCategoryMapper.toCode(item.category());
+            if (code != null && existing.contains(item.externalId())) {
+                byCode.computeIfAbsent(code, k -> new ArrayList<>()).add(item.externalId());
+            }
+        }
+        byCode.forEach((code, ids) -> persistence.fillMissingCategory(source.getId(), ids, code));
     }
 
     /** Notices saved earlier without a body (detail fetch failed) get another chance on every run. */

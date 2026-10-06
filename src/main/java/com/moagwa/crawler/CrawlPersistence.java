@@ -45,6 +45,11 @@ class CrawlPersistence {
     }
 
     @Transactional
+    public int fillMissingCategory(Long sourceId, List<String> externalIds, String category) {
+        return externalIds.isEmpty() ? 0 : notices.fillMissingCategory(sourceId, externalIds, category);
+    }
+
+    @Transactional
     public void applyContent(Long noticeId, DetailContent content) {
         notices.findById(noticeId).ifPresent(n -> n.applyContent(content.html(), content.text()));
     }
