@@ -1,37 +1,142 @@
-# Moa-Gwa BE
+# 모아과 백엔드
 
-Spring Boot 3.2 / Java 21 / Maven / PostgreSQL (Flyway).
+가톨릭대학교 학내 공지와 일정을 통합 제공하는 Spring Boot API 서버입니다.
 
-## Run
+## 주요 기능
+
+- 학과·학생회별 공지 통합 조회
+- 공지 검색, 상세 조회, 관심 기관 관리
+- Google / Kakao 소셜 로그인
+- 관리자 공지 등록·수정·삭제
+- Firebase 웹 푸시 알림
+- 학교 홈페이지 공지 크롤링
+- Instagram 학생회 공지 및 캐러셀 이미지 수집
+
+## 기술 스택
+
+- Spring Boot 3.2
+- Java 21
+- Maven
+- PostgreSQL
+- Flyway
+- Firebase Admin SDK
+- Node.js + Playwright
+
+## 실행
+
+먼저 로컬 PostgreSQL을 실행합니다.
+
 ```bash
-docker compose up -d          # local PostgreSQL (or: scripts/dev-db.sh start, no Docker needed)
-./mvnw spring-boot:run        # http://localhost:8080/actuator/health
-./mvnw test                   # tests use in-memory H2
+docker compose up -d
+# Docker를 사용하지 않는 경우
+scripts/dev-db.sh start
+./mvnw spring-boot:run
 ```
 
-## Push notifications (FCM)
-Web push is sent by `notification/PushSender` after a notice is saved. It needs a Firebase **service-account key** (JSON).
-- Keep the key **outside the repo**: `~/.secrets/moagwa-firebase-adminsdk.json` (never commit it).
-- Run with `scripts/run-local.sh` — it picks the key up automatically. Or set `FIREBASE_CREDENTIALS_PATH=/path/to/key.json` yourself (production: mount the key as a secret file).
-- Without a key the server still starts; push delivery is skipped and the log says `FCM push disabled`.
-- Devices register through `PUT/DELETE /api/me/push-tokens` (table `device_tokens`).
+서버 주소: `http://localhost:8080`
 
-## Google sign-in (Firebase)
-Students can sign in with Google. The browser signs in through Firebase (popup) and sends the Firebase **ID token** to `POST /api/auth/google`; the server verifies it with the Firebase service-account key (same key as push) and issues our own JWT. Users are stored with `auth_provider = GOOGLE`.
-- Needs the Firebase key (`FIREBASE_CREDENTIALS_PATH`, see above). Without it the endpoint answers `503`.
-- Optional: `GOOGLE_ALLOWED_EMAIL_DOMAIN=school.ac.kr` limits sign-in to one email domain (empty = any Google account).
-- Firebase console: Authentication → Sign-in method → Google must be enabled, and the site's domain must be in *Authorized domains* (`localhost` is there by default).
+헬스 체크:
 
-## Package layout (`com.moagwa`)
-`common` · `notice` · `organization` · `user` · `admin` · `crawler` · `notification`
+```bash
+curl http://localhost:8080/actuator/health
+```
 
-## Local login
-With the `local` profile (default) sample data is created: admins `student-council`, `ai-council`, `cs-council` (password `moagwa1234`). Students sign in with `POST /api/auth/dev-student`; Kakao login needs `KAKAO_CLIENT_ID`.
+로컬 실행 시 Firebase 키가 있으면 `scripts/run-local.sh`가 자동으로 읽습니다.
 
-## Crawler
-Sources live in `crawl_sources` (seeded by `V2__seed_...sql`, 45 school sites). Runs every `crawler.interval` (default 10 min); disable with `CRAWLER_ENABLED=false`. The first crawl of a source backfills silently (no events).
+```bash
+scripts/run-local.sh
+```
 
-## Instagram 크롤러 (로컬 Playwright, Apify 미사용)
+테스트는 인메모리 H2를 사용합니다.
+
+```bash
+./mvnw test
+```
+
+## 환경변수와 보안
+
+비밀값은 저장소에 커밋하지 않고 로컬 `BE/.env` 또는 배포 플랫폼의 Secret으로 주입합니다.
+
+| 환경변수 | 용도 |
+| --- | --- |
+| `JWT_SECRET` | 자체 JWT 서명 키 |
+| `FIREBASE_CREDENTIALS_PATH` | Firebase 서비스 계정 JSON 경로 |
+| `KAKAO_CLIENT_ID` | 카카오 REST API 키 |
+| `KAKAO_CLIENT_SECRET` | 카카오 선택적 보안 키 |
+| `GOOGLE_ALLOWED_EMAIL_DOMAIN` | Google 로그인 허용 이메일 도메인 |
+| `CORS_ALLOWED_ORIGINS` | 프론트엔드 허용 주소 |
+| `DB_URL` | 운영 PostgreSQL 주소 |
+| `DB_USERNAME` | 운영 DB 사용자 |
+| `DB_PASSWORD` | 운영 DB 비밀번호 |
+
+## 로그인과 알림
+
+### Google 로그인
+
+프론트엔드가 Firebase로 로그인한 뒤 ID Token을 `POST /api/auth/google`로 전달합니다. 백엔드는 Firebase 서비스 계정으로 토큰을 검증하고 자체 JWT를 발급합니다.
+
+- Firebase Console에서 Google 로그인 활성화
+- 배포 도메인을 Authorized domains에 등록
+- `FIREBASE_CREDENTIALS_PATH`가 없으면 Google 로그인은 사용할 수 없음
+- `GOOGLE_ALLOWED_EMAIL_DOMAIN`을 비우면 모든 이메일 도메인 허용
+
+### Kakao 로그인
+
+프론트엔드가 Kakao OAuth 인가 코드를 `POST /api/auth/kakao`로 전달합니다. 백엔드는 Kakao 사용자 정보를 확인한 뒤 자체 JWT를 발급합니다.
+
+### Firebase 푸시 알림
+
+공지 저장 후 `notification/PushSender`가 웹 푸시를 전송합니다. Firebase 키가 없으면 서버는 정상 실행되지만 푸시만 비활성화됩니다.
+
+푸시 토큰 API:
+
+- `PUT /api/me/push-tokens`
+- `DELETE /api/me/push-tokens`
+
+## 주요 API
+
+| 기능 | API |
+| --- | --- |
+| 관리자 로그인 | `POST /api/admin/auth/login` |
+| Google 로그인 | `POST /api/auth/google` |
+| Kakao 로그인 | `POST /api/auth/kakao` |
+| 공지 피드 | `GET /api/feed` |
+| 공지 상세 | `GET /api/notices/{id}` |
+| 일정 조회 | `GET /api/schedule` |
+| 실시간 공지 스트림 | `GET /api/stream` |
+| 내 프로필 | `GET /api/me/profile` |
+
+## 로컬 로그인
+
+기본 `local` 프로필에서는 테스트용 관리자 계정이 생성됩니다.
+
+- `student-council`
+- `ai-council`
+- `cs-council`
+- 비밀번호: `moagwa1234`
+
+학생 개발 로그인은 `POST /api/auth/dev-student`를 사용합니다. 운영 환경에서는 개발 로그인 기능을 사용하지 않습니다.
+
+## 일반 공지 크롤러
+
+일반 학교 홈페이지 공지는 `crawl_sources` 테이블에 등록된 출처에서 수집합니다. 기본 주기는 10분이며 `CRAWLER_ENABLED=false`로 비활성화할 수 있습니다.
+
+첫 수집은 기존 공지를 조용히 저장하고 알림 이벤트를 발송하지 않습니다.
+
+## 패키지 구조
+
+`com.moagwa` 아래에 다음 도메인이 있습니다.
+
+- `common`: 공통 설정과 보안
+- `auth`: Google·Kakao 인증
+- `notice`: 공지 도메인
+- `organization`: 학과·학생회
+- `user`: 사용자와 관심 설정
+- `admin`: 관리자 기능
+- `crawler`: 일반·Instagram 크롤러
+- `notification`: FCM 푸시
+
+## Instagram 학생회 공지 크롤러 (로컬 Playwright)
 
 인스타그램 학생회 공지는 백엔드 서버가 직접 수집한다. Apify Actor, Apify 토큰, 호출당 과금 API는 사용하지 않는다.
 
@@ -46,7 +151,7 @@ Sources live in `crawl_sources` (seeded by `V2__seed_...sql`, 45 school sites). 
 ### 백엔드 실행 환경마다 한 번만 설정
 
 ```bash
-cd BE/instagram-browser-scraper
+cd instagram-browser-scraper
 npm ci
 npx playwright install chromium
 ```
@@ -109,4 +214,6 @@ sequenceDiagram
     end
 ```
 
-Branching and commit rules: see [CONTRIBUTING.md](CONTRIBUTING.md).
+## 브랜치와 커밋
+
+브랜치 전략과 커밋·PR 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고합니다.
