@@ -10,6 +10,10 @@ import org.springframework.data.repository.query.Param;
 
 public interface CrawledNoticeRepository extends JpaRepository<CrawledNotice, Long> {
 
+    @Query("select n from CrawledNotice n where n.source.id = :sourceId and n.externalId = :externalId")
+    java.util.Optional<CrawledNotice> findBySourceAndExternalId(@Param("sourceId") Long sourceId,
+                                                                 @Param("externalId") String externalId);
+
     @Query("select n.externalId from CrawledNotice n where n.source.id = :sourceId and n.externalId in :externalIds")
     Set<String> findExistingExternalIds(@Param("sourceId") Long sourceId,
                                         @Param("externalIds") List<String> externalIds);
