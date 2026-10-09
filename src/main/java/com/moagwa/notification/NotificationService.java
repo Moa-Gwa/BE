@@ -2,7 +2,9 @@ package com.moagwa.notification;
 
 import com.moagwa.crawler.CrawledNoticeCreatedEvent;
 import java.util.Collection;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,7 @@ public class NotificationService {
             """;
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final ApplicationEventPublisher events;
 
     /** Must run inside the caller's transaction so notifications commit together with the notice. */
     @Transactional
@@ -43,13 +46,13 @@ public class NotificationService {
         if (!categoryIds.isEmpty()) {
             p.addValue("cats", categoryIds);
         }
-        return jdbc.update("""
+        return insertAndPush("""
                 INSERT INTO notifications (user_id, type, source, notice_id, title, body)
                 SELECT u.id, :type, :source, :nid, :title, o.name
                   FROM users u
                   JOIN organizations o ON o.id = :org
                   LEFT JOIN notification_settings ns ON ns.user_id = u.id
-                 WHERE """ + MATCH.formatted(categoryMatch) + " AND " + settingCheck, p);
+                 WHERE """ + MATCH.formatted(categoryMatch) + " AND " + settingCheck, p, "MANUAL", noticeId, title);
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -58,12 +61,27 @@ public class NotificationService {
         MapSqlParameterSource p = new MapSqlParameterSource()
                 .addValue("org", e.organizationId()).addValue("nid", e.noticeId()).addValue("title", e.title())
                 .addValue("type", "NEW_NOTICE").addValue("source", "CRAWLED");
-        jdbc.update("""
+        insertAndPush("""
                 INSERT INTO notifications (user_id, type, source, notice_id, title, body)
                 SELECT u.id, :type, :source, :nid, :title, o.name
                   FROM users u
                   JOIN organizations o ON o.id = :org
                   LEFT JOIN notification_settings ns ON ns.user_id = u.id
-                 WHERE """ + MATCH.formatted("") + " AND COALESCE(ns.new_notice, TRUE)", p);
+                 WHERE """ + MATCH.formatted("") + " AND COALESCE(ns.new_notice, TRUE)", p, "CRAWLED",
+                e.noticeId(), e.title());
     }
+
+    /** Inserts the notification rows and asks {@link PushSender} to push to the same recipients after the commit. */
+    private int insertAndPush(String insertSql, MapSqlParameterSource params, String source, long noticeId,
+                              String title) {
+        List<Recipient> rows = jdbc.query(insertSql + " RETURNING user_id, body", params,
+                (rs, i) -> new Recipient(rs.getLong("user_id"), rs.getString("body")));
+        if (!rows.isEmpty()) {
+            events.publishEvent(new PushRequested(rows.stream().map(Recipient::userId).toList(), source, noticeId,
+                    title, rows.get(0).body()));
+        }
+        return rows.size();
+    }
+
+    private record Recipient(long userId, String body) {}
 }
