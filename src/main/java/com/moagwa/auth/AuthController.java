@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
@@ -22,10 +23,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
+@Slf4j
 class AuthController {
 
     private final AdminRepository admins;
@@ -73,7 +76,11 @@ class AuthController {
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve().body(Map.class);
             profile = http.get().uri("https://kapi.kakao.com/v2/user/me")
                     .header("Authorization", "Bearer " + token.get("access_token")).retrieve().body(Map.class);
+        } catch (RestClientResponseException e) {
+            log.warn("Kakao authentication request failed: status={}", e.getStatusCode());
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "카카오 인증에 실패했습니다.");
         } catch (RuntimeException e) {
+            log.warn("Kakao authentication request failed", e);
             throw new ApiException(HttpStatus.UNAUTHORIZED, "카카오 인증에 실패했습니다.");
         }
         String kakaoId = String.valueOf(profile.get("id"));
