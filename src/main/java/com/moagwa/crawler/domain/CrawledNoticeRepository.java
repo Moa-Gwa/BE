@@ -18,6 +18,10 @@ public interface CrawledNoticeRepository extends JpaRepository<CrawledNotice, Lo
     Set<String> findExistingExternalIds(@Param("sourceId") Long sourceId,
                                         @Param("externalIds") List<String> externalIds);
 
+    @Query("select n from CrawledNotice n where n.source.id = :sourceId and n.externalId in :externalIds")
+    List<CrawledNotice> findBySourceIdAndExternalIdIn(@Param("sourceId") Long sourceId,
+                                                       @Param("externalIds") List<String> externalIds);
+
     @Query("select n from CrawledNotice n where n.source.id = :sourceId and n.contentFetched = false order by n.id desc")
     List<CrawledNotice> findUnfetched(@Param("sourceId") Long sourceId, Pageable pageable);
 

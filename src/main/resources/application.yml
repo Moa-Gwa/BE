@@ -41,3 +41,13 @@ crawler:
   max-retries: 3
   retry-delay: PT2S
   detail-retry-batch: 20
+  instagram:
+    # Runs Node.js + Playwright on this server. No Apify Actor or API token is used.
+    enabled: ${INSTAGRAM_CRAWLER_ENABLED:false}
+    interval: ${INSTAGRAM_CRAWLER_INTERVAL:P1D}
+    initial-delay: ${INSTAGRAM_CRAWLER_INITIAL_DELAY:PT1M}
+    results-limit: ${INSTAGRAM_CRAWLER_RESULTS_LIMIT:3}
+    node-command: ${INSTAGRAM_CRAWLER_NODE:node}
+    profile-links-script: ${INSTAGRAM_PROFILE_LINKS_SCRIPT:instagram-browser-scraper/src/collect-profile-links.js}
+    post-details-script: ${INSTAGRAM_POST_DETAILS_SCRIPT:instagram-browser-scraper/src/collect-post-details.js}
+    command-timeout: ${INSTAGRAM_CRAWLER_COMMAND_TIMEOUT:PT3M}

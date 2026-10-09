@@ -5,6 +5,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Keep local-only credentials out of Git while making them available to Spring and the local Node collector.
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
+
 KEY="${FIREBASE_CREDENTIALS_PATH:-$HOME/.secrets/moagwa-firebase-adminsdk.json}"
 if [ -f "$KEY" ]; then
   export FIREBASE_CREDENTIALS_PATH="$KEY"
