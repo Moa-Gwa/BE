@@ -1,5 +1,8 @@
 package com.moagwa.auth;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
+import com.google.firebase.auth.FirebaseToken;
 import com.moagwa.admin.Admin;
 import com.moagwa.admin.AdminRepository;
 import com.moagwa.common.exception.ApiException;
@@ -7,9 +10,11 @@ import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
@@ -35,12 +40,16 @@ class AuthController {
     private final UserRepository users;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
+    private final ObjectProvider<FirebaseAuth> firebaseAuth;
 
     @Value("${moagwa.kakao.client-id:}")
     private String kakaoClientId;
 
     @Value("${moagwa.kakao.client-secret:}")
     private String kakaoClientSecret;
+
+    @Value("${moagwa.google.allowed-email-domain:}")
+    private String googleAllowedEmailDomain;
 
     @PostMapping("/admin/auth/login")
     @Transactional(readOnly = true)
@@ -89,6 +98,45 @@ class AuthController {
         return session(findOrCreate("KAKAO", kakaoId, nickname));
     }
 
+    /**
+     * Exchanges a Firebase ID token (obtained by signing in with Google in the browser) for our own session.
+     * Needs the Firebase service-account key; optionally limited to one email domain (moagwa.google.allowed-email-domain).
+     */
+    @PostMapping("/auth/google")
+    @Transactional
+    StudentSession googleLogin(@Valid @RequestBody GoogleLogin body) {
+        FirebaseAuth auth = firebaseAuth.getIfAvailable();
+        if (auth == null) {
+            throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "구글 로그인이 설정되지 않았습니다.");
+        }
+        FirebaseToken token;
+        try {
+            token = auth.verifyIdToken(body.idToken());
+        } catch (FirebaseAuthException | IllegalArgumentException e) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "구글 인증에 실패했습니다.");
+        }
+        if (!isGoogleSignIn(token) || token.getEmail() == null || !token.isEmailVerified()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "인증된 구글 계정으로만 로그인할 수 있습니다.");
+        }
+        String domain = googleAllowedEmailDomain.trim().toLowerCase(Locale.ROOT);
+        if (!domain.isEmpty() && !token.getEmail().toLowerCase(Locale.ROOT).endsWith("@" + domain)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "@" + domain + " 계정으로만 로그인할 수 있습니다.");
+        }
+        return session(findOrCreate("GOOGLE", token.getUid(), nicknameOf(token)));
+    }
+
+    private static boolean isGoogleSignIn(FirebaseToken token) {
+        return token.getClaims().get("firebase") instanceof Map<?, ?> firebase
+                && "google.com".equals(firebase.get("sign_in_provider"));
+    }
+
+    private static String nicknameOf(FirebaseToken token) {
+        String name = token.getName() == null || token.getName().isBlank()
+                ? token.getEmail().substring(0, token.getEmail().indexOf('@')) : token.getName().trim();
+        name = name.isBlank() ? "학생" : name;
+        return name.length() > 50 ? name.substring(0, 50) : name;
+    }
+
     /** Local-development shortcut so the app is usable without a Kakao app registration. */
     @RestController
     @RequestMapping("/api/auth")
@@ -123,6 +171,9 @@ class AuthController {
     }
 
     record KakaoLogin(@NotBlank String code, @NotBlank String redirectUri) {
+    }
+
+    record GoogleLogin(@NotBlank String idToken) {
     }
 
     record DevLogin(@NotBlank String nickname) {
