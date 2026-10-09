@@ -77,6 +77,11 @@ public class CrawlSource {
         return lastCrawledAt == null;
     }
 
+    /** Imported sources are stored for provenance but must not be sent to the HTML board crawler. */
+    public void disable() {
+        this.enabled = false;
+    }
+
     public void markSuccess(Instant now, boolean empty) {
         this.lastCrawledAt = now;
         this.lastStatus = empty ? CrawlStatus.EMPTY : CrawlStatus.SUCCESS;

@@ -56,7 +56,7 @@ public class NoticeQueryService {
             return new NoticeDetail("CRAWLED", rs.getLong("id"),
                     new FeedItem.Org(rs.getLong("org_id"), rs.getString("org_name"), rs.getString("org_type")),
                     rs.getString("title"), rs.getString("content_text"), rs.getString("content_html"),
-                    category == null ? List.of() : List.of(category), List.of(), null, false,
+                    category == null ? List.of() : List.of(category), crawledImages(id), null, false,
                     published.toInstant(), published.toInstant(), null, null, null, null, rs.getString("url"),
                     null, rs.getInt("view_count"), 0, false);
         });
@@ -68,6 +68,11 @@ public class NoticeQueryService {
                 d.categories(), d.images(), d.blocks(), d.urgent(), d.publishedAt(), d.updatedAt(), d.eventStartAt(),
                 d.eventEndAt(), d.deadlineAt(), d.location(), d.externalLink(), d.status(), d.viewCount(),
                 d.bookmarkCount(), isBookmarked(viewerId, "CRAWLED", id));
+    }
+
+    private List<String> crawledImages(long id) {
+        return jdbc.queryForList("SELECT url FROM crawled_notice_images WHERE notice_id = :id ORDER BY sort_order",
+                new MapSqlParameterSource("id", id), String.class);
     }
 
     @Transactional
