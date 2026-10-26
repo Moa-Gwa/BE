@@ -34,10 +34,17 @@ public class User {
     @Column(name = "admission_year")
     private Integer admissionYear;
 
+    @Column(name = "verified_at")
+    private java.time.Instant verifiedAt;
+
     public User(String authProvider, String providerUserId, String nickname) {
         this.authProvider = authProvider;
         this.providerUserId = providerUserId;
         this.nickname = nickname;
+    }
+
+    public boolean isVerified() {
+        return verifiedAt != null;
     }
 
     public void updateProfile(String nickname, Long primaryDepartmentId, Integer admissionYear) {

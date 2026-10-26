@@ -152,8 +152,8 @@ class AuthController {
         StudentSession devStudent(@Valid @RequestBody DevLogin body) {
             User user = users.findByAuthProviderAndProviderUserId("DEV", body.nickname())
                     .orElseGet(() -> users.save(new User("DEV", body.nickname(), body.nickname())));
-            return new StudentSession(jwt.issueStudent(user.getId()), user.getNickname(),
-                    user.getPrimaryDepartmentId() != null);
+            return new StudentSession(jwt.issueStudent(user.getId(), user.isVerified()), user.getNickname(),
+                    user.getPrimaryDepartmentId() != null, user.isVerified());
         }
     }
 
@@ -163,8 +163,8 @@ class AuthController {
     }
 
     private StudentSession session(User user) {
-        return new StudentSession(jwt.issueStudent(user.getId()), user.getNickname(),
-                user.getPrimaryDepartmentId() != null);
+        return new StudentSession(jwt.issueStudent(user.getId(), user.isVerified()), user.getNickname(),
+                user.getPrimaryDepartmentId() != null, user.isVerified());
     }
 
     record AdminLogin(@NotBlank String loginId, @NotBlank String password) {
@@ -185,6 +185,6 @@ class AuthController {
     record AdminSession(String token, String name, OrgInfo organization) {
     }
 
-    record StudentSession(String token, String nickname, boolean onboarded) {
+    record StudentSession(String token, String nickname, boolean onboarded, boolean verified) {
     }
 }

@@ -41,14 +41,19 @@ public class JwtService {
     }
 
     public String issueStudent(long userId) {
-        return issue(userId, "STUDENT", null);
+        return issueStudent(userId, false);
+    }
+
+    /** verified = 학교 메일로 재학생 인증을 마친 학생. 생활거래 API가 이 값을 확인한다. */
+    public String issueStudent(long userId, boolean verified) {
+        return issue(userId, "STUDENT", null, verified);
     }
 
     public String issueAdmin(long adminId, long organizationId) {
-        return issue(adminId, "ADMIN", organizationId);
+        return issue(adminId, "ADMIN", organizationId, false);
     }
 
-    private String issue(long id, String role, Long organizationId) {
+    private String issue(long id, String role, Long organizationId, boolean verified) {
         Instant now = Instant.now();
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .subject(String.valueOf(id))
@@ -57,6 +62,9 @@ public class JwtService {
                 .claim("role", role);
         if (organizationId != null) {
             claims.claim("org", organizationId);
+        }
+        if (verified) {
+            claims.claim("verified", true);
         }
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims.build()))
                 .getTokenValue();
