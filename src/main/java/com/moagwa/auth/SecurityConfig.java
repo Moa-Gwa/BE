@@ -2,6 +2,9 @@ package com.moagwa.auth;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -9,10 +12,11 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -21,11 +25,19 @@ class SecurityConfig {
 
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http, JwtService jwt) throws Exception {
-        JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
-        authorities.setAuthoritiesClaimName("role");
-        authorities.setAuthorityPrefix("ROLE_");
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(authorities);
+        // role 클레임은 ROLE_STUDENT / ROLE_ADMIN, verified 클레임(재학생 인증 완료)은 ROLE_VERIFIED가 된다.
+        converter.setJwtGrantedAuthoritiesConverter(jwtToken -> {
+            List<GrantedAuthority> granted = new ArrayList<>();
+            String role = jwtToken.getClaimAsString("role");
+            if (role != null) {
+                granted.add(new SimpleGrantedAuthority("ROLE_" + role));
+            }
+            if (Boolean.TRUE.equals(jwtToken.getClaim("verified"))) {
+                granted.add(new SimpleGrantedAuthority("ROLE_VERIFIED"));
+            }
+            return granted;
+        });
 
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(withDefaults())
@@ -39,6 +51,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/notices/*/view", "/api/crawled-notices/*/view")
                         .permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/market/**", "/api/me/market/**").hasRole("VERIFIED")
                         .requestMatchers("/api/me/**").hasRole("STUDENT")
                         .requestMatchers("/error").permitAll()
                         .anyRequest().denyAll())
