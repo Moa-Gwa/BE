@@ -232,6 +232,47 @@ class MarketApiIntegrationTest {
     }
 
     @Test
+    void searchMatchesDescriptionsAndTreatsWildcardsLiterally() throws Exception {
+        String keyword = tag + " 할인100%_ABC";
+        Map<String, Object> item = Map.of("title", "검색용 물품", "description", keyword,
+                "price", 1000, "category", "BOOK");
+        mvc.perform(post("/api/market/items").header("Authorization", token(seller))
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(item)))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/market/items").param("q", "  " + keyword.toLowerCase() + "  ")
+                .param("category", "BOOK").param("size", "1").header("Authorization", token(buyer)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.hasNext").value(false));
+        mvc.perform(get("/api/market/items").param("q", keyword).param("category", "CLOTHES")
+                .header("Authorization", token(buyer)))
+                .andExpect(jsonPath("$.items.length()").value(0));
+
+        Map<String, Object> group = Map.of("title", "검색용 모집", "description", keyword,
+                "unitPrice", 1000, "targetQuantity", 3,
+                "deadlineAt", Instant.now().plus(2, ChronoUnit.DAYS).toString());
+        MvcResult created = mvc.perform(post("/api/market/group-buys").header("Authorization", token(seller))
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(group)))
+                .andExpect(status().isCreated()).andReturn();
+        long id = read(created).get("summary").get("id").asLong();
+        // A similar string must not match the literal percent/underscore search.
+        jdbc.update("INSERT INTO group_buys (host_id, title, description, unit_price, target_quantity, deadline_at) "
+                + "VALUES (?, ?, ?, 1000, 3, now() + interval '2 days')",
+                seller.getId(), "다른 모집", tag + " 할인100원XABC");
+        mvc.perform(get("/api/market/group-buys").param("q", " " + keyword.toLowerCase() + " ")
+                .param("size", "1").header("Authorization", token(buyer)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].id").value(id)).andExpect(jsonPath("$.hasNext").value(false));
+        mvc.perform(get("/api/market/group-buys").param("q", keyword).param("status", "CLOSED")
+                .header("Authorization", token(buyer)))
+                .andExpect(jsonPath("$.items.length()").value(0));
+        mvc.perform(post("/api/market/group-buys/" + id + "/close").header("Authorization", token(seller)))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/market/group-buys").param("q", keyword).param("status", "CLOSED")
+                .header("Authorization", token(buyer)))
+                .andExpect(jsonPath("$.items.length()").value(1));
+    }
+
+    @Test
     void groupBuyRejectsPastDeadline() throws Exception {
         Map<String, Object> body = Map.of("title", "지난 모집", "unitPrice", 1000, "targetQuantity", 2,
                 "deadlineAt", Instant.now().minus(1, ChronoUnit.HOURS).toString());
