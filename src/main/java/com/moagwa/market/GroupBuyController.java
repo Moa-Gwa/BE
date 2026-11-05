@@ -45,6 +45,7 @@ class GroupBuyController {
     @GetMapping
     @Transactional(readOnly = true)
     GroupBuyPage list(@RequestParam(defaultValue = "RECRUITING") String status,
+                      @RequestParam(required = false) String q,
                       @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
                       Authentication auth) {
         String where;
@@ -58,10 +59,15 @@ class GroupBuyController {
         } else {
             throw ApiException.badRequest("올바르지 않은 모집 상태입니다.");
         }
+        MapSqlParameterSource params = new MapSqlParameterSource();
+        if (q != null && !q.isBlank()) {
+            where += " AND (g.title ILIKE :q OR g.description ILIKE :q)";
+            params.addValue("q", MarketRepository.like(q));
+        }
         int s = MarketRepository.pageSize(size);
         int pg = Math.max(page, 0);
         List<GroupBuySummary> rows = repository.groupBuys(CurrentUser.from(auth).id(), where,
-                new MapSqlParameterSource(), order, s + 1, pg * s);
+                params, order, s + 1, pg * s);
         boolean hasNext = rows.size() > s;
         return new GroupBuyPage(hasNext ? rows.subList(0, s) : rows, pg, s, hasNext);
     }

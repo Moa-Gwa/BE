@@ -64,7 +64,7 @@ class MarketItemController {
             p.addValue("status", status);
         }
         if (q != null && !q.isBlank()) {
-            where.append(" AND i.title ILIKE :q");
+            where.append(" AND (i.title ILIKE :q OR i.description ILIKE :q)");
             p.addValue("q", MarketRepository.like(q));
         }
         String order = switch (sort) {
