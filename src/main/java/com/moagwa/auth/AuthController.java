@@ -8,6 +8,7 @@ import com.moagwa.admin.AdminRepository;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.Locale;
@@ -19,6 +20,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.LinkedMultiValueMap;
@@ -40,6 +42,7 @@ class AuthController {
     private final UserRepository users;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
+    private final AuthCookies cookies;
     private final ObjectProvider<FirebaseAuth> firebaseAuth;
 
     @Value("${moagwa.kakao.client-id:}")
@@ -53,19 +56,19 @@ class AuthController {
 
     @PostMapping("/admin/auth/login")
     @Transactional(readOnly = true)
-    AdminSession adminLogin(@Valid @RequestBody AdminLogin body) {
+    AdminSession adminLogin(@Valid @RequestBody AdminLogin body, HttpServletResponse response) {
         Admin admin = admins.findByLoginId(body.loginId())
                 .filter(a -> encoder.matches(body.password(), a.getPasswordHash()))
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."));
         var org = admin.getOrganization();
-        return new AdminSession(jwt.issueAdmin(admin.getId(), org.getId()), admin.getName(),
-                new OrgInfo(org.getId(), org.getName(), org.getType().name()));
+        cookies.issue(response, jwt.issueAdmin(admin.getId(), org.getId()));
+        return new AdminSession(admin.getName(), new OrgInfo(org.getId(), org.getName(), org.getType().name()));
     }
 
     /** Exchanges a Kakao authorization code for our own session. Needs moagwa.kakao.client-id to be configured. */
     @PostMapping("/auth/kakao")
     @Transactional
-    StudentSession kakaoLogin(@Valid @RequestBody KakaoLogin body) {
+    StudentSession kakaoLogin(@Valid @RequestBody KakaoLogin body, HttpServletResponse response) {
         if (kakaoClientId.isBlank()) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "카카오 로그인이 설정되지 않았습니다.");
         }
@@ -95,7 +98,7 @@ class AuthController {
         String kakaoId = String.valueOf(profile.get("id"));
         String nickname = profile.get("properties") instanceof Map<?, ?> props && props.get("nickname") != null
                 ? String.valueOf(props.get("nickname")) : "학생";
-        return session(findOrCreate("KAKAO", kakaoId, nickname));
+        return session(findOrCreate("KAKAO", kakaoId, nickname), response);
     }
 
     /**
@@ -104,7 +107,7 @@ class AuthController {
      */
     @PostMapping("/auth/google")
     @Transactional
-    StudentSession googleLogin(@Valid @RequestBody GoogleLogin body) {
+    StudentSession googleLogin(@Valid @RequestBody GoogleLogin body, HttpServletResponse response) {
         FirebaseAuth auth = firebaseAuth.getIfAvailable();
         if (auth == null) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "구글 로그인이 설정되지 않았습니다.");
@@ -122,7 +125,14 @@ class AuthController {
         if (!domain.isEmpty() && !token.getEmail().toLowerCase(Locale.ROOT).endsWith("@" + domain)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "@" + domain + " 계정으로만 로그인할 수 있습니다.");
         }
-        return session(findOrCreate("GOOGLE", token.getUid(), nicknameOf(token)));
+        return session(findOrCreate("GOOGLE", token.getUid(), nicknameOf(token)), response);
+    }
+
+    /** 세션 쿠키를 지운다. 로그인하지 않은 상태에서 불러도 204. */
+    @PostMapping("/auth/logout")
+    ResponseEntity<Void> logout(HttpServletResponse response) {
+        cookies.clear(response);
+        return ResponseEntity.noContent().build();
     }
 
     private static boolean isGoogleSignIn(FirebaseToken token) {
@@ -146,14 +156,15 @@ class AuthController {
 
         private final UserRepository users;
         private final JwtService jwt;
+        private final AuthCookies cookies;
 
         @PostMapping("/dev-student")
         @Transactional
-        StudentSession devStudent(@Valid @RequestBody DevLogin body) {
+        StudentSession devStudent(@Valid @RequestBody DevLogin body, HttpServletResponse response) {
             User user = users.findByAuthProviderAndProviderUserId("DEV", body.nickname())
                     .orElseGet(() -> users.save(new User("DEV", body.nickname(), body.nickname())));
-            return new StudentSession(jwt.issueStudent(user.getId(), user.isVerified()), user.getNickname(),
-                    user.getPrimaryDepartmentId() != null, user.isVerified());
+            cookies.issue(response, jwt.issueStudent(user.getId(), user.isVerified()));
+            return StudentSession.of(user);
         }
     }
 
@@ -162,9 +173,9 @@ class AuthController {
                 .orElseGet(() -> users.save(new User(provider, providerUserId, nickname)));
     }
 
-    private StudentSession session(User user) {
-        return new StudentSession(jwt.issueStudent(user.getId(), user.isVerified()), user.getNickname(),
-                user.getPrimaryDepartmentId() != null, user.isVerified());
+    private StudentSession session(User user, HttpServletResponse response) {
+        cookies.issue(response, jwt.issueStudent(user.getId(), user.isVerified()));
+        return StudentSession.of(user);
     }
 
     record AdminLogin(@NotBlank String loginId, @NotBlank String password) {
@@ -182,9 +193,13 @@ class AuthController {
     record OrgInfo(long id, String name, String type) {
     }
 
-    record AdminSession(String token, String name, OrgInfo organization) {
+    /** 토큰은 응답 본문에 담지 않고 HttpOnly 쿠키로만 보낸다. */
+    record AdminSession(String name, OrgInfo organization) {
     }
 
-    record StudentSession(String token, String nickname, boolean onboarded, boolean verified) {
+    record StudentSession(String nickname, boolean onboarded, boolean verified) {
+        static StudentSession of(User user) {
+            return new StudentSession(user.getNickname(), user.getPrimaryDepartmentId() != null, user.isVerified());
+        }
     }
 }

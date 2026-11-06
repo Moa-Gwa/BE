@@ -10,9 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moagwa.auth.AuthCookies;
 import com.moagwa.auth.JwtService;
 import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
+import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -109,9 +111,13 @@ class MarketApiIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON).content("{\"code\":\"" + code + "\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.verified").value(true)).andReturn();
 
-        String verifiedToken = "Bearer " + read(done).get("token").asText();
-        mvc.perform(get("/api/market/items").header("Authorization", verifiedToken)).andExpect(status().isOk());
-        mvc.perform(get("/api/me/verification").header("Authorization", verifiedToken))
+        // 인증을 마치면 verified 권한이 담긴 새 세션 쿠키가 발급되고, 본문에는 토큰이 없다.
+        assertThat(read(done).has("token")).isFalse();
+        Cookie verified = done.getResponse().getCookie(AuthCookies.NAME);
+        assertThat(verified).isNotNull();
+        assertThat(verified.isHttpOnly()).isTrue();
+        mvc.perform(get("/api/market/items").cookie(verified)).andExpect(status().isOk());
+        mvc.perform(get("/api/me/verification").cookie(verified))
                 .andExpect(jsonPath("$.verified").value(true))
                 .andExpect(jsonPath("$.schoolEmail").value("stu***@catholic.ac.kr"));
     }

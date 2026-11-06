@@ -24,6 +24,6 @@ final class VerificationDto {
     record SendResult(int expiresInSeconds, String devCode) {
     }
 
-    record ConfirmResult(boolean verified, String token) {
+    record ConfirmResult(boolean verified) {
     }
 }

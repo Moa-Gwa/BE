@@ -20,6 +20,13 @@ moagwa:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://[::1]:3000}
   jwt:
     secret: ${JWT_SECRET}
+  auth:
+    cookie:
+      # 로그인 토큰을 담는 HttpOnly 쿠키. 운영은 HTTPS라 secure=true.
+      secure: ${AUTH_COOKIE_SECURE:true}
+      same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+      # 비우면 API 호스트에만 쿠키가 붙는다. 하위 도메인끼리 공유해야 할 때만 지정(예: moagwa.kr).
+      domain: ${AUTH_COOKIE_DOMAIN:}
   upload:
     dir: ${UPLOAD_DIR:./uploads}
   firebase:

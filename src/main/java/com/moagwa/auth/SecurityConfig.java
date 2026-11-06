@@ -17,6 +17,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -55,7 +56,9 @@ class SecurityConfig {
                         .requestMatchers("/api/me/**").hasRole("STUDENT")
                         .requestMatchers("/error").permitAll()
                         .anyRequest().denyAll())
-                .oauth2ResourceServer(o -> o.jwt(j -> j.decoder(jwt.decoder()).jwtAuthenticationConverter(converter)));
+                .addFilterBefore(new CookieCsrfFilter(), BearerTokenAuthenticationFilter.class)
+                .oauth2ResourceServer(o -> o.bearerTokenResolver(new AuthTokenResolver(jwt.decoder()))
+                        .jwt(j -> j.decoder(jwt.decoder()).jwtAuthenticationConverter(converter)));
         return http.build();
     }
 

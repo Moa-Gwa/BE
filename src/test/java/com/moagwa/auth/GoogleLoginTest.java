@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -50,7 +51,8 @@ class GoogleLoginTest {
         FirebaseToken t_ok = token(uid, "kim@school.ac.kr", true, "google.com", "김모아");
         when(firebaseAuth.verifyIdToken("ok")).thenReturn(t_ok);
 
-        login("ok").andExpect(status().isOk()).andExpect(jsonPath("$.token").isNotEmpty())
+        login("ok").andExpect(status().isOk()).andExpect(jsonPath("$.token").doesNotExist())
+                .andExpect(cookie().httpOnly(AuthCookies.NAME, true))
                 .andExpect(jsonPath("$.nickname").value("김모아")).andExpect(jsonPath("$.onboarded").value(false));
         login("ok").andExpect(status().isOk());
 
