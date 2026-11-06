@@ -3,7 +3,6 @@ package com.moagwa.market;
 import com.moagwa.auth.JwtService;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.market.StudentVerificationRepository.Pending;
-import com.moagwa.market.VerificationDto.ConfirmResult;
 import com.moagwa.market.VerificationDto.SendResult;
 import com.moagwa.market.VerificationDto.Status;
 import java.security.SecureRandom;
@@ -69,7 +68,8 @@ class VerificationService {
 
     /** 틀린 시도 횟수는 예외가 나도 남아야 하므로 ApiException에서는 롤백하지 않는다. */
     @Transactional(noRollbackFor = ApiException.class)
-    ConfirmResult confirm(String code, long me) {
+    /** 인증을 마치고, verified 권한이 담긴 새 토큰을 돌려준다. */
+    String confirm(String code, long me) {
         Pending pending = verifications.lock(me).orElseThrow(VerificationService::codeNotRequested);
         if (pending.verifiedAt() != null) {
             throw alreadyVerified();
@@ -91,7 +91,7 @@ class VerificationService {
             throw emailTaken();
         }
         verifications.markVerified(me);
-        return new ConfirmResult(true, jwt.issueStudent(me, true));
+        return jwt.issueStudent(me, true);
     }
 
     private void requireSchoolEmail(String email) {

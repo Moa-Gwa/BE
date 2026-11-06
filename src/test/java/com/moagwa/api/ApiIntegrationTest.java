@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moagwa.admin.Admin;
 import com.moagwa.admin.AdminNoticeService;
 import com.moagwa.admin.AdminRepository;
+import com.moagwa.auth.AuthCookies;
 import com.moagwa.auth.JwtService;
 import com.moagwa.crawler.domain.CrawlSource;
 import com.moagwa.crawler.domain.CrawlSourceRepository;
@@ -89,10 +91,11 @@ class ApiIntegrationTest {
     }
 
     @Test
-    void adminLoginReturnsTokenAndRejectsWrongPassword() throws Exception {
+    void adminLoginSetsSessionCookieAndRejectsWrongPassword() throws Exception {
         mvc.perform(post("/api/admin/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"loginId\":\"a-" + tag + "\",\"password\":\"pw-1234\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(status().isOk()).andExpect(jsonPath("$.token").doesNotExist())
+                .andExpect(cookie().httpOnly(AuthCookies.NAME, true))
                 .andExpect(jsonPath("$.organization.name").value("학생회-" + tag));
         mvc.perform(post("/api/admin/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"loginId\":\"a-" + tag + "\",\"password\":\"nope\"}"))

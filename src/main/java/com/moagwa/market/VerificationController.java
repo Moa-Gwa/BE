@@ -1,11 +1,13 @@
 package com.moagwa.market;
 
+import com.moagwa.auth.AuthCookies;
 import com.moagwa.auth.CurrentUser;
 import com.moagwa.market.VerificationDto.ConfirmRequest;
 import com.moagwa.market.VerificationDto.ConfirmResult;
 import com.moagwa.market.VerificationDto.EmailRequest;
 import com.moagwa.market.VerificationDto.SendResult;
 import com.moagwa.market.VerificationDto.Status;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 class VerificationController {
 
     private final VerificationService verification;
+    private final AuthCookies cookies;
 
     @GetMapping
     Status status(Authentication auth) {
@@ -33,8 +36,10 @@ class VerificationController {
     }
 
     @PostMapping("/confirm")
-    ConfirmResult confirm(@Valid @RequestBody ConfirmRequest body, Authentication auth) {
-        return verification.confirm(body.code(), me(auth));
+    ConfirmResult confirm(@Valid @RequestBody ConfirmRequest body, Authentication auth, HttpServletResponse response) {
+        // 생활거래 권한(verified)이 담긴 토큰으로 쿠키를 바꾼다.
+        cookies.issue(response, verification.confirm(body.code(), me(auth)));
+        return new ConfirmResult(true);
     }
 
     private static long me(Authentication auth) {

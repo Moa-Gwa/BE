@@ -7,6 +7,9 @@ spring:
 moagwa:
   jwt:
     secret: local-dev-only-secret-change-me-0123456789
+  auth:
+    cookie:
+      secure: false
   dev-data: true
   verification:
     expose-code: true
