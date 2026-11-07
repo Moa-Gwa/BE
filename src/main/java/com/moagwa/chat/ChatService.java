@@ -30,12 +30,13 @@ public class ChatService {
     private final ApplicationEventPublisher events;
     private final SimpUserRegistry connectedUsers;
 
-    /** 판매자가 거래 요청을 수락하면 판매자·구매자 1:1 방을 연다. */
+    /** 거래 요청 수락 시 판매자·구매자 1:1 방 생성, 열린 화면에 목록 갱신 알림 */
     public void openForRequest(long requestId) {
-        chats.createForRequest(requestId);
+        chats.createForRequest(requestId).ifPresent(roomId ->
+                events.publishEvent(new ChatEvents.RoomOpened(chats.members(roomId), roomId)));
     }
 
-    /** 같이 사기 모집을 열면 단체방을 연다. 참여자는 참여하는 순간 멤버가 된다. */
+    /** 같이 사기 모집 생성 시 단체방 생성. 참여자는 참여 즉시 멤버 */
     public void openForGroupBuy(long groupBuyId) {
         chats.createForGroupBuy(groupBuyId);
     }
@@ -66,7 +67,7 @@ public class ChatService {
         chats.markRead(roomId, me, message.id());
         List<Long> members = chats.members(roomId);
         events.publishEvent(new ChatEvents.MessageSent(members, message));
-        // 채팅 실시간 채널을 구독 중이지 않은 멤버에게만 푸시를 보낸다. 화면에서 이미 받은 사람에게 중복으로 가지 않게 한다.
+        // 채팅 채널 미구독 멤버에게만 푸시. 화면에서 받은 사람에게 중복 발송 방지
         List<Long> offline = members.stream().filter(id -> id != me && !listening(id)).toList();
         if (!offline.isEmpty()) {
             events.publishEvent(new PushRequested(offline, message.senderName(), preview(content),
@@ -82,7 +83,7 @@ public class ChatService {
                 new ChatEvents.ReadUpdated(chats.members(roomId), roomId, new ReadState(me, last))));
     }
 
-    /** 연결만 있고 채팅 채널을 구독하지 않은 경우(오류 채널만 구독 등)에는 푸시를 받아야 한다. */
+    /** 채팅 채널 구독 여부. 연결만 있고 미구독(오류 채널만 구독 등)이면 푸시 대상 */
     private boolean listening(long userId) {
         SimpUser user = connectedUsers.getUser(String.valueOf(userId));
         return user != null && user.getSessions().stream().flatMap(s -> s.getSubscriptions().stream())

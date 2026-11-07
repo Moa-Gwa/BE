@@ -93,8 +93,8 @@ class ChatIntegrationTest {
         assertThat(received.get("type").asText()).isEqualTo("message");
         assertThat(received.at("/message/content").asText()).isEqualTo("안녕하세요, 내일 가능하세요?");
         assertThat(received.at("/message/senderId").asLong()).isEqualTo(seller.getId());
-        assertThat(sellerInbox.poll(5, TimeUnit.SECONDS)).isNotNull(); // 보낸 사람도 받아 다른 기기·탭과 맞춘다
-        assertThat(PushCapture.pushes).noneMatch(p -> p.url().equals("/life/chats/" + roomId)); // 둘 다 화면에서 받음
+        assertThat(sellerInbox.poll(5, TimeUnit.SECONDS)).isNotNull(); // 보낸 사람도 수신해 다른 기기·탭과 동기화
+        assertThat(PushCapture.pushes).noneMatch(p -> p.url().equals("/life/chats/" + roomId)); // 둘 다 화면에서 수신
         long messageId = received.at("/message/id").asLong();
 
         JsonNode buyerRooms = getJson("/api/me/chats", buyer);
@@ -113,7 +113,7 @@ class ChatIntegrationTest {
         assertThat(read.at("/read/lastReadId").asLong()).isEqualTo(messageId);
         assertThat(getJson("/api/me/chats", buyer).get(0).get("unread").asLong()).isZero();
 
-        // 같은 위치를 다시 읽으면 읽음 이벤트를 다시 보내지 않는다.
+        // 같은 위치 재읽음 시 읽음 이벤트 생략
         mvc.perform(put("/api/chats/" + roomId + "/read").header("Authorization", bearer(buyer))
                 .contentType(MediaType.APPLICATION_JSON).content("{\"lastReadId\":" + messageId + "}"))
                 .andExpect(status().isNoContent());
@@ -129,12 +129,27 @@ class ChatIntegrationTest {
     }
 
     @Test
+    void buyerIsToldWhenTradeRoomOpens() throws Exception {
+        User seller = verifiedUser("seller");
+        User buyer = verifiedUser("buyer");
+        BlockingQueue<JsonNode> buyerInbox = new LinkedBlockingQueue<>();
+        connect(buyer, buyerInbox, "/user/queue/chat");
+
+        long roomId = acceptedTradeRoom(seller, buyer);
+
+        JsonNode event = buyerInbox.poll(5, TimeUnit.SECONDS);
+        assertThat(event).isNotNull();
+        assertThat(event.get("type").asText()).isEqualTo("room");
+        assertThat(event.get("roomId").asLong()).isEqualTo(roomId);
+    }
+
+    @Test
     void pushGoesOnlyToMembersNotListeningToChat() throws Exception {
         User seller = verifiedUser("seller");
         User buyer = verifiedUser("buyer");
         long roomId = acceptedTradeRoom(seller, buyer);
         StompSession sellerWs = connect(seller, new LinkedBlockingQueue<>(), "/user/queue/chat");
-        // 연결은 있지만 채팅 채널을 구독하지 않은 구매자는 푸시를 받아야 한다.
+        // 연결만 있고 채팅 채널 미구독인 구매자는 푸시 대상
         connect(buyer, new LinkedBlockingQueue<>(), "/user/queue/errors");
         PushCapture.pushes.clear();
 
@@ -198,7 +213,7 @@ class ChatIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** 커밋 전에 발행되는 푸시 요청을 가로채 확인한다(실제 FCM 발송은 테스트에서 꺼져 있다). */
+    /** 커밋 전 발행되는 푸시 요청 확인용(테스트에서 실제 FCM 발송은 꺼짐) */
     @TestConfiguration
     static class PushCapture {
 
@@ -238,7 +253,7 @@ class ChatIntegrationTest {
                 inbox.add((JsonNode) payload);
             }
         });
-        // 구독이 서버에 등록될 때까지 기다린다.
+        // 서버에 구독 등록될 때까지 대기
         String name = String.valueOf(user.getId());
         for (int i = 0; i < 50 && !subscribed(name, destination); i++) {
             Thread.sleep(50);

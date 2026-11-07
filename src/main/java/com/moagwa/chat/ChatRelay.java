@@ -9,8 +9,8 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * 저장이 커밋된 뒤 방 멤버 각자의 /user/queue/chat 으로 보낸다. 롤백된 메시지는 나가지 않는다.
- * 단일 서버 기준이다. 서버를 여러 대로 늘리면 외부 브로커(Redis 등)로 바꿔야 한다(BE #8).
+ * 저장 커밋 후 방 멤버 각자의 /user/queue/chat 으로 전달. 롤백된 메시지는 미전달
+ * 단일 서버 기준. 서버 여러 대로 확장 시 외부 브로커(Redis 등) 필요(BE #8)
  */
 @Component
 @RequiredArgsConstructor
@@ -28,6 +28,11 @@ class ChatRelay {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     void on(ChatEvents.ReadUpdated e) {
         send(e.members(), Event.read(e.roomId(), e.read()));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    void on(ChatEvents.RoomOpened e) {
+        send(e.members(), Event.room(e.roomId()));
     }
 
     private void send(List<Long> members, Event event) {

@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 조회·읽음 처리는 REST, 보내기는 STOMP(/app/chat.send). 새 메시지와 읽음은 /user/queue/chat 으로 받는다. */
+/** 조회·읽음 처리는 REST, 전송은 STOMP(/app/chat.send). 새 메시지·읽음은 /user/queue/chat 으로 수신 */
 @RestController
 @RequiredArgsConstructor
 class ChatController {
@@ -47,13 +47,13 @@ class ChatController {
         chats.read(roomId, body.lastReadId(), CurrentUser.from(auth).id());
     }
 
-    /** WebSocket 연결은 /ws 핸드셰이크에서 쿠키로 인증되며, 여기의 principal 이름은 사용자 id다. */
+    /** /ws 핸드셰이크에서 쿠키로 인증됨. principal 이름 = 사용자 id */
     @MessageMapping("/chat.send")
     void send(SendRequest body, Principal principal) {
         chats.send(body.roomId(), body.content(), Long.parseLong(principal.getName()));
     }
 
-    /** 보내기 실패는 보낸 사람의 /user/queue/errors 로만 알린다. */
+    /** 전송 실패는 보낸 사람의 /user/queue/errors 로만 전달 */
     @MessageExceptionHandler
     @SendToUser(destinations = "/queue/errors", broadcast = false)
     Map<String, String> sendFailed(ApiException e) {

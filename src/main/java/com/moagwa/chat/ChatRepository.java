@@ -19,9 +19,10 @@ class ChatRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    void createForRequest(long requestId) {
-        jdbc.update("INSERT INTO chat_rooms (request_id) VALUES (:id) ON CONFLICT DO NOTHING",
-                new MapSqlParameterSource("id", requestId));
+    /** 새로 만든 경우 방 id, 이미 있으면 빈 값 */
+    Optional<Long> createForRequest(long requestId) {
+        return jdbc.queryForList("INSERT INTO chat_rooms (request_id) VALUES (:id) ON CONFLICT DO NOTHING RETURNING id",
+                new MapSqlParameterSource("id", requestId), Long.class).stream().findFirst();
     }
 
     void createForGroupBuy(long groupBuyId) {
@@ -40,7 +41,7 @@ class ChatRepository {
                 new MapSqlParameterSource("room", roomId), Long.class);
     }
 
-    /** 거래 방 제목은 물품명, 단체방은 모집명. 거래 방은 상대 닉네임도 함께 보여 준다. */
+    /** 제목: 거래 방은 물품명, 단체방은 모집명. 거래 방은 상대 닉네임 포함 */
     List<RoomSummary> findRooms(long me, int limit) {
         return jdbc.query("""
                 SELECT r.id, r.request_id, r.group_buy_id, i.id AS item_id,
@@ -71,7 +72,7 @@ class ChatRepository {
                         rs.getString("last_content"), instant(rs, "last_at"), rs.getLong("unread")));
     }
 
-    /** before보다 오래된 메시지를 최신순으로 limit개 가져온다. */
+    /** before보다 오래된 메시지 최신순 limit개 */
     List<Message> findMessages(long roomId, Long before, int limit) {
         return jdbc.query("""
                 SELECT m.id, m.room_id, m.sender_id, u.nickname, m.content, m.created_at
@@ -95,7 +96,7 @@ class ChatRepository {
                 ChatRepository::message);
     }
 
-    /** 읽음 위치는 뒤로 가지 않고, 방에 없는 메시지 번호로 앞질러 가지도 않는다. 앞으로 갔을 때만 새 위치를 돌려준다. */
+    /** 읽음 위치는 후퇴·방 밖 번호로의 전진 없음. 전진한 경우에만 새 위치 반환 */
     Optional<Long> markRead(long roomId, long userId, long lastReadId) {
         return jdbc.queryForList("""
                 INSERT INTO chat_reads (room_id, user_id, last_read_id)
