@@ -47,19 +47,18 @@ class PushSender {
         }
         List<String> tokens = jdbc.queryForList("SELECT token FROM device_tokens WHERE user_id IN (:ids)",
                 new MapSqlParameterSource("ids", e.userIds()), String.class);
-        String url = "/notices/" + e.source().toLowerCase() + "/" + e.noticeId();
         for (int from = 0; from < tokens.size(); from += BATCH_LIMIT) {
             List<String> chunk = tokens.subList(from, Math.min(from + BATCH_LIMIT, tokens.size()));
-            send(messaging, chunk, e, url);
+            send(messaging, chunk, e);
         }
     }
 
-    private void send(FirebaseMessaging messaging, List<String> tokens, PushRequested e, String url) {
+    private void send(FirebaseMessaging messaging, List<String> tokens, PushRequested e) {
         List<Message> messages = new ArrayList<>();
         for (String token : tokens) {
             messages.add(Message.builder().setToken(token)
                     .putData("title", e.title()).putData("body", e.body() == null ? "" : e.body())
-                    .putData("url", url).build());
+                    .putData("url", e.url()).build());
         }
         try {
             BatchResponse result = messaging.sendEach(messages);
@@ -69,10 +68,9 @@ class PushSender {
                     handleFailure(tokens.get(i), responses.get(i).getException());
                 }
             }
-            log.info("Push sent: {} ok, {} failed (notice {} {})", result.getSuccessCount(), result.getFailureCount(),
-                    e.source(), e.noticeId());
+            log.info("Push sent: {} ok, {} failed ({})", result.getSuccessCount(), result.getFailureCount(), e.url());
         } catch (FirebaseMessagingException | RuntimeException ex) {
-            log.warn("Push batch failed for notice {} {}", e.source(), e.noticeId(), ex);
+            log.warn("Push batch failed ({})", e.url(), ex);
         }
     }
 

@@ -1,5 +1,6 @@
 package com.moagwa.market;
 
+import com.moagwa.chat.ChatService;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.market.GroupBuyRepository.DetailExtra;
 import com.moagwa.market.GroupBuyRepository.LockedGroupBuy;
@@ -23,6 +24,7 @@ class GroupBuyService {
     private static final int MY_LIST_LIMIT = 100;
 
     private final GroupBuyRepository groupBuys;
+    private final ChatService chats;
 
     @Transactional(readOnly = true)
     GroupBuyPage search(String status, String query, int page, int size, long me) {
@@ -46,6 +48,7 @@ class GroupBuyService {
         long id = groupBuys.insert(me, new NewGroupBuy(body.title().trim(),
                 MarketInput.trimToEmpty(body.description()), body.unitPrice(), body.targetQuantity(),
                 body.deadlineAt(), MarketInput.trimToNull(body.pickupPlace()), body.imageUrl()));
+        chats.openForGroupBuy(id);
         return detail(id, me);
     }
 

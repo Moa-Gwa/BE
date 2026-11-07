@@ -1,5 +1,6 @@
 package com.moagwa.market;
 
+import com.moagwa.chat.ChatService;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.market.MarketDto.RequestCreated;
 import com.moagwa.market.MarketDto.RequestView;
@@ -21,6 +22,7 @@ class TradeRequestService {
     private final TradeRequestRepository requests;
     private final MarketItemRepository items;
     private final MarketItemService itemService;
+    private final ChatService chats;
 
     @Transactional
     RequestCreated create(long itemId, String message, long me) {
@@ -62,5 +64,6 @@ class TradeRequestService {
         }
         requests.markAccepted(id);
         requests.rejectOtherPending(request.itemId(), id);
+        chats.openForRequest(id);
     }
 }
