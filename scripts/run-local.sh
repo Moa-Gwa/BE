@@ -20,4 +20,7 @@ else
   echo "[run-local] FCM 키 없음 ($KEY) -> 푸시 발송 비활성" >&2
 fi
 
+# 개발용 로그인·샘플 데이터는 local 프로필에서만 켜진다. 기본 프로필이 없으므로 여기서 명시한다.
+export SPRING_PROFILES_ACTIVE="${SPRING_PROFILES_ACTIVE:-local}"
+
 exec ./mvnw spring-boot:run "$@"
