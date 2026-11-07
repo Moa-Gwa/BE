@@ -5,6 +5,7 @@ import com.moagwa.market.MarketDto.GroupBuyDetail;
 import com.moagwa.market.MarketDto.GroupBuyPage;
 import com.moagwa.market.MarketDto.GroupBuyRequest;
 import com.moagwa.market.MarketDto.JoinRequest;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "같이 사기", description = "재학생 인증 필요")
 @RestController
 @RequestMapping("/api/market/group-buys")
 @RequiredArgsConstructor

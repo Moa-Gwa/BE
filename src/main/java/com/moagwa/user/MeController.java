@@ -2,6 +2,7 @@ package com.moagwa.user;
 
 import com.moagwa.auth.CurrentUser;
 import com.moagwa.common.exception.ApiException;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import java.sql.Timestamp;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Everything a signed-in student manages about themself. The user id always comes from the token. */
+@Tag(name = "내 정보", description = "학생 로그인 필요")
 @RestController
 @RequestMapping("/api/me")
 @RequiredArgsConstructor

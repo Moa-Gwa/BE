@@ -8,6 +8,7 @@ import com.moagwa.market.MarketDto.RequestCreated;
 import com.moagwa.market.MarketDto.RequestView;
 import com.moagwa.market.MarketDto.StatusRequest;
 import com.moagwa.market.MarketDto.TradeRequest;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 중고거래. 재학생 인증을 마친 학생만 쓸 수 있고(SecurityConfig), 판매자 id는 항상 토큰에서 가져온다. */
+@Tag(name = "중고거래", description = "재학생 인증 필요")
 @RestController
 @RequestMapping("/api/market")
 @RequiredArgsConstructor

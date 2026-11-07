@@ -6,6 +6,7 @@ import com.moagwa.notice.Notice;
 import com.moagwa.notice.NoticeStatus;
 import com.moagwa.organization.Organization;
 import com.moagwa.organization.OrganizationRepository;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+@Tag(name = "관리자", description = "관리자 로그인 필요(POST /api/admin/auth/login)")
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor

@@ -6,6 +6,7 @@ import com.moagwa.chat.ChatDto.ReadRequest;
 import com.moagwa.chat.ChatDto.RoomSummary;
 import com.moagwa.chat.ChatDto.SendRequest;
 import com.moagwa.common.exception.ApiException;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.security.Principal;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 조회·읽음 처리는 REST, 전송은 STOMP(/app/chat.send). 새 메시지·읽음은 /user/queue/chat 으로 수신 */
+@Tag(name = "채팅", description = "재학생 인증 필요. 메시지 전송·실시간 수신은 STOMP(/ws), README 참고")
 @RestController
 @RequiredArgsConstructor
 class ChatController {
