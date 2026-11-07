@@ -38,6 +38,8 @@ scripts/run-local.sh
 
 서버 주소: `http://localhost:8080`
 
+API 문서(Swagger): `http://localhost:8080/swagger-ui/index.html`. 로그인 API를 먼저 호출하면 세션 쿠키로 나머지 API를 바로 실행 가능함. prod에서는 비활성화
+
 헬스 체크:
 
 ```bash

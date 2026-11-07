@@ -55,7 +55,7 @@ class SecurityConfig {
                         .requestMatchers("/api/market/**", "/api/me/market/**").hasRole("VERIFIED")
                         .requestMatchers("/ws", "/api/chats/**", "/api/me/chats").hasRole("VERIFIED")
                         .requestMatchers("/api/me/**").hasRole("STUDENT")
-                        .requestMatchers("/error").permitAll()
+                        .requestMatchers("/error", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().denyAll())
                 .addFilterBefore(new CookieCsrfFilter(), BearerTokenAuthenticationFilter.class)
                 .oauth2ResourceServer(o -> o.bearerTokenResolver(new AuthTokenResolver(jwt.decoder()))
