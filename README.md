@@ -30,8 +30,11 @@
 docker compose up -d
 # Docker를 사용하지 않는 경우
 scripts/dev-db.sh start
-./mvnw spring-boot:run
+scripts/run-local.sh
+# 또는 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
 ```
+
+기본 프로필이 없으므로 로컬 실행 시 `local` 프로필을 반드시 지정. 프로필 없이 실행하면 개발용 로그인, 샘플 데이터, 인증 코드 노출이 꺼짐.
 
 서버 주소: `http://localhost:8080`
 
