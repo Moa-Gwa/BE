@@ -3,3 +3,28 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  # 재학생 인증 메일. AWS SES SMTP 기준(예: email-smtp.ap-northeast-2.amazonaws.com, 587, STARTTLS).
+  # 사용자명·비밀번호는 SES 콘솔에서 발급한 SMTP 자격 증명이며 환경변수로만 넘긴다.
+  mail:
+    host: ${MAIL_HOST}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
+
+moagwa:
+  mail:
+    # 보내는 사람 주소. SES에서 인증한 도메인 또는 주소여야 한다(예: "모아과 <no-reply@moagwa.kr>").
+    from: ${MAIL_FROM}
+
+management:
+  health:
+    mail:
+      # SES 일시 장애로 헬스체크가 DOWN 되어 서버가 재시작되지 않게 한다. 발송 실패는 요청 단위로 503 처리한다.
+      enabled: false
