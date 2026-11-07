@@ -7,9 +7,12 @@ final class ChatDto {
 
     private ChatDto() {}
 
-    /** 채팅 목록 한 줄. type: TRADE(중고거래 1:1) 또는 GROUP(같이 사기 단체방) */
+    /**
+     * 채팅 목록 한 줄. type: TRADE(중고거래 1:1) 또는 GROUP(같이 사기 단체방)
+     * thumbnail: 물품 첫 사진 또는 모집 사진(없으면 null), category: 사진 없을 때 대체 표시용(단체방은 null)
+     */
     record RoomSummary(long id, String type, String title, String partner, Long itemId, Long groupBuyId,
-                       String lastMessage, String lastAt, long unread) {}
+                       String thumbnail, String category, String lastMessage, String lastAt, long unread) {}
 
     record Message(long id, long roomId, long senderId, String senderName, String content, String createdAt) {}
 
