@@ -77,8 +77,8 @@ public class NotificationService {
         List<Recipient> rows = jdbc.query(insertSql + " RETURNING user_id, body", params,
                 (rs, i) -> new Recipient(rs.getLong("user_id"), rs.getString("body")));
         if (!rows.isEmpty()) {
-            events.publishEvent(new PushRequested(rows.stream().map(Recipient::userId).toList(), source, noticeId,
-                    title, rows.get(0).body()));
+            events.publishEvent(new PushRequested(rows.stream().map(Recipient::userId).toList(), title,
+                    rows.get(0).body(), "/notices/" + source.toLowerCase() + "/" + noticeId));
         }
         return rows.size();
     }

@@ -53,6 +53,7 @@ class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/market/**", "/api/me/market/**").hasRole("VERIFIED")
+                        .requestMatchers("/ws", "/api/chats/**", "/api/me/chats").hasRole("VERIFIED")
                         .requestMatchers("/api/me/**").hasRole("STUDENT")
                         .requestMatchers("/error").permitAll()
                         .anyRequest().denyAll())
