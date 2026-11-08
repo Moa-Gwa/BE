@@ -61,3 +61,10 @@ crawler:
     profile-links-script: ${INSTAGRAM_PROFILE_LINKS_SCRIPT:instagram-browser-scraper/src/collect-profile-links.js}
     post-details-script: ${INSTAGRAM_POST_DETAILS_SCRIPT:instagram-browser-scraper/src/collect-post-details.js}
     command-timeout: ${INSTAGRAM_CRAWLER_COMMAND_TIMEOUT:PT3M}
+
+# API 문서(Swagger)는 기본 비활성화, local 프로필에서만 켬
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

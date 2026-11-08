@@ -13,3 +13,9 @@ moagwa:
   dev-data: true
   verification:
     expose-code: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

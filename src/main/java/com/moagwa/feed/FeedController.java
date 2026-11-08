@@ -4,6 +4,7 @@ import com.moagwa.auth.CurrentUser;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.organization.OrganizationRepository;
 import com.moagwa.notice.CategoryRepository;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "공지 피드", description = "조회는 누구나. /api/feed/for-me, /api/me/bookmarks는 학생 로그인 필요")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor

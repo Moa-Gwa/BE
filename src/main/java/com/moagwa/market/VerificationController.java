@@ -7,6 +7,7 @@ import com.moagwa.market.VerificationDto.ConfirmResult;
 import com.moagwa.market.VerificationDto.EmailRequest;
 import com.moagwa.market.VerificationDto.SendResult;
 import com.moagwa.market.VerificationDto.Status;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "재학생 인증", description = "학생 로그인 필요. 인증 완료 시 쿠키가 재학생 권한으로 교체됨")
 @RestController
 @RequestMapping("/api/me/verification")
 @RequiredArgsConstructor

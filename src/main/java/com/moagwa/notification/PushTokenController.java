@@ -1,6 +1,7 @@
 package com.moagwa.notification;
 
 import com.moagwa.auth.CurrentUser;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Registers the signed-in student's browser/device for push (FCM). The user id always comes from the token. */
+@Tag(name = "푸시 토큰", description = "학생 로그인 필요")
 @RestController
 @RequestMapping("/api/me/push-tokens")
 @RequiredArgsConstructor

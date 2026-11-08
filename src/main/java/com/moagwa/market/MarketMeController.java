@@ -4,6 +4,7 @@ import com.moagwa.auth.CurrentUser;
 import com.moagwa.market.MarketDto.GroupBuySummary;
 import com.moagwa.market.MarketDto.ItemSummary;
 import com.moagwa.market.MarketDto.RequestView;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** 내 거래: 내가 올린 물품, 관심 물품, 내가 보낸 거래 요청, 내가 만들었거나 참여한 같이 사기. */
+@Tag(name = "내 거래", description = "재학생 인증 필요")
 @RestController
 @RequestMapping("/api/me/market")
 @RequiredArgsConstructor

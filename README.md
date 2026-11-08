@@ -38,6 +38,38 @@ scripts/run-local.sh
 
 서버 주소: `http://localhost:8080`
 
+## API 문서(Swagger)
+
+`http://localhost:8080/swagger-ui/index.html` (local 프로필에서만 켜짐, 그 외 프로필은 기본 비활성화)
+
+로그인 API를 Swagger에서 호출하면 세션 쿠키가 저장되어 나머지 API를 Try it out으로 바로 실행 가능. 변경 요청(POST·PUT·DELETE)에 필요한 `X-Requested-With` 헤더는 기본값으로 채워짐.
+
+| 권한 | 로그인 방법 | 사용 가능한 그룹 |
+| --- | --- | --- |
+| 누구나 | 필요 없음 | 인증, 공지 피드(조회), 실시간 공지 |
+| 학생 | `POST /api/auth/dev-student` `{"nickname":"테스트"}` | 내 정보, 푸시 토큰, 재학생 인증, 북마크, 맞춤 피드(`/api/feed/for-me`) |
+| 재학생 인증 | 학생 로그인 후 아래 순서 | 중고거래, 같이 사기, 내 거래, 생활 사진 업로드, 채팅 |
+| 관리자 | `POST /api/admin/auth/login` `{"loginId":"student-council","password":"moagwa1234"}` | 관리자 |
+
+재학생 인증 순서(local):
+1. `POST /api/me/verification/email` `{"email":"아무거나@catholic.ac.kr"}`: 메일 대신 응답의 `devCode`로 코드 확인
+2. `POST /api/me/verification/confirm` `{"code":"<devCode>"}`: 쿠키가 재학생 권한으로 교체됨
+
+권한이 부족하면 401(로그인 안 됨) 또는 403(권한 없음) 반환.
+
+### 채팅 실시간(STOMP)
+
+메시지 전송과 실시간 수신은 Swagger에 나오지 않는 STOMP over WebSocket으로 처리. 목록·이전 메시지·읽음 처리는 Swagger의 채팅 그룹 참고.
+
+- 연결: `ws://localhost:8080/ws`. 재학생 인증된 세션 쿠키 필요, 허용 출처(`CORS_ALLOWED_ORIGINS`, 기본 `http://localhost:3000`)에서만 연결 가능
+- 전송: `SEND /app/chat.send` 본문 `{"roomId":1,"content":"안녕하세요"}` (1~1000자, 방 멤버만)
+- 수신: `SUBSCRIBE /user/queue/chat`. 이벤트 `type`별 형식
+  - `message`: `{"type":"message","roomId":1,"message":{"id":..,"senderId":..,"senderName":..,"content":..,"createdAt":..}}`
+  - `read`: `{"type":"read","roomId":1,"read":{"userId":..,"lastReadId":..}}` 상대가 읽은 위치
+  - `room`: `{"type":"room","roomId":1}` 새 방 생성(거래 수락 등). 채팅 목록 다시 조회
+- 오류: `SUBSCRIBE /user/queue/errors`. 전송 실패 시 `{"message":"..."}` 수신
+- `/user/queue/chat`을 구독 중이 아닌 멤버에게는 FCM 푸시 발송
+
 헬스 체크:
 
 ```bash

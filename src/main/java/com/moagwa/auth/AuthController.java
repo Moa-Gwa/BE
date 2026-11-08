@@ -8,6 +8,7 @@ import com.moagwa.admin.AdminRepository;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -32,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+@Tag(name = "인증", description = "로그인·로그아웃. 누구나 호출 가능. dev-student는 local 프로필 전용")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -148,6 +150,7 @@ class AuthController {
     }
 
     /** Local-development shortcut so the app is usable without a Kakao app registration. */
+    @Tag(name = "인증")
     @RestController
     @RequestMapping("/api/auth")
     @Profile("local")
