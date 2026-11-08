@@ -48,6 +48,10 @@ class ChatRepository {
                        COALESCE(i.title, g.title) AS title,
                        CASE WHEN r.request_id IS NULL THEN NULL
                             WHEN i.seller_id = :me THEN bu.nickname ELSE su.nickname END AS partner,
+                       COALESCE((SELECT im.url FROM market_item_images im
+                                  WHERE im.item_id = i.id ORDER BY im.sort_order, im.id LIMIT 1),
+                                g.image_url) AS thumbnail,
+                       i.category,
                        last.content AS last_content, COALESCE(last.created_at, r.created_at) AS last_at,
                        (SELECT count(*) FROM chat_messages x
                          WHERE x.room_id = r.id AND x.sender_id <> :me AND x.id > COALESCE(cr.last_read_id, 0)) AS unread
@@ -69,6 +73,7 @@ class ChatRepository {
                         rs.getObject("request_id") == null ? "GROUP" : "TRADE",
                         rs.getString("title"), rs.getString("partner"),
                         rs.getObject("item_id", Long.class), rs.getObject("group_buy_id", Long.class),
+                        rs.getString("thumbnail"), rs.getString("category"),
                         rs.getString("last_content"), instant(rs, "last_at"), rs.getLong("unread")));
     }
 

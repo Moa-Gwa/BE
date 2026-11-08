@@ -101,6 +101,8 @@ class ChatIntegrationTest {
         assertThat(buyerRooms).hasSize(1);
         assertThat(buyerRooms.get(0).get("type").asText()).isEqualTo("TRADE");
         assertThat(buyerRooms.get(0).get("partner").asText()).isEqualTo(seller.getNickname());
+        assertThat(buyerRooms.get(0).get("thumbnail").asText()).isEqualTo("/uploads/a.jpg"); // 첫 순서 사진
+        assertThat(buyerRooms.get(0).get("category").asText()).isEqualTo("BOOK");
         assertThat(buyerRooms.get(0).get("unread").asLong()).isEqualTo(1);
         assertThat(getJson("/api/me/chats", seller).get(0).get("unread").asLong()).isZero();
 
@@ -231,6 +233,8 @@ class ChatIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(item)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8))
                 .get("id").asLong();
+        jdbc.update("INSERT INTO market_item_images (item_id, url, sort_order) VALUES (?, '/uploads/b.jpg', 1), (?, '/uploads/a.jpg', 0)",
+                itemId, itemId);
         long requestId = json.readTree(mvc.perform(post("/api/market/items/" + itemId + "/requests")
                         .header("Authorization", bearer(buyer)).contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8))
