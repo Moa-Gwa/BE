@@ -250,3 +250,15 @@ sequenceDiagram
 ## 브랜치와 커밋
 
 브랜치 전략과 커밋·PR 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고합니다.
+
+### 로컬 HTTPS 프론트 연결
+
+`./scripts/run-local.sh`는 `local` 프로필을 사용하며 HTTP/HTTPS의 `localhost:3000` 출처를 허용한다.
+`.env`에 `CORS_ALLOWED_ORIGINS`를 지정했다면 기본값을 덮어쓰므로 다음처럼 HTTPS도 포함한다.
+
+```dotenv
+CORS_ALLOWED_ORIGINS=http://localhost:3000,https://localhost:3000
+```
+
+변경 후 백엔드를 재시작한다. 프론트의 HTTPS 개발 서버에서는 `NEXT_PUBLIC_API_BASE_URL=`로 설정해
+같은 출처의 `/api` 프록시를 사용한다. 출처 제한과 CSRF 검사는 계속 적용된다.
