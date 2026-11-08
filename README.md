@@ -61,7 +61,7 @@ scripts/run-local.sh
 
 메시지 전송과 실시간 수신은 Swagger에 나오지 않는 STOMP over WebSocket으로 처리. 목록·이전 메시지·읽음 처리는 Swagger의 채팅 그룹 참고.
 
-- 연결: `ws://localhost:8080/ws`. 재학생 인증된 세션 쿠키 필요, 허용 출처(`CORS_ALLOWED_ORIGINS`, 기본 `http://localhost:3000`)에서만 연결 가능
+- 연결: `ws://localhost:8080/ws`. 재학생 인증된 세션 쿠키 필요, 허용 출처(`CORS_ALLOWED_ORIGINS`, 기본 `http://localhost:3000`, `https://localhost:3000`)에서만 연결 가능
 - 전송: `SEND /app/chat.send` 본문 `{"roomId":1,"content":"안녕하세요"}` (1~1000자, 방 멤버만)
 - 수신: `SUBSCRIBE /user/queue/chat`. 이벤트 `type`별 형식
   - `message`: `{"type":"message","roomId":1,"message":{"id":..,"senderId":..,"senderName":..,"content":..,"createdAt":..}}`
@@ -97,7 +97,7 @@ scripts/run-local.sh
 | `KAKAO_CLIENT_ID` | 카카오 REST API 키 |
 | `KAKAO_CLIENT_SECRET` | 카카오 선택적 보안 키 |
 | `GOOGLE_ALLOWED_EMAIL_DOMAIN` | Google 로그인 허용 이메일 도메인 |
-| `CORS_ALLOWED_ORIGINS` | 프론트엔드 허용 주소 |
+| `CORS_ALLOWED_ORIGINS` | 프론트엔드 허용 주소(쉼표 구분). 기본값은 로컬 FE `http://localhost:3000`, HTTPS 실행용 `https://localhost:3000` |
 | `DB_URL` | 운영 PostgreSQL 주소 |
 | `DB_USERNAME` | 운영 DB 사용자 |
 | `DB_PASSWORD` | 운영 DB 비밀번호 |
