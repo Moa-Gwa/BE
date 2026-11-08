@@ -5,6 +5,8 @@ spring:
     password: moagwa
 
 moagwa:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,https://localhost:3000,http://[::1]:3000,https://[::1]:3000}
   jwt:
     secret: local-dev-only-secret-change-me-0123456789
   auth:
