@@ -1,5 +1,6 @@
 -- 같이 사기 참여 결제. 주문 1건 = 참여자 1명의 결제 1회
--- status: READY(주문 생성) → PAID(승인 완료) → CANCELED(환불)
+-- status: READY(주문 생성) → APPROVING(결제사 승인 요청 중) → PAID(승인 완료) → CANCELED(환불)
+--         결제사 승인 거절 시 FAILED. 승인 후 참여를 확정하지 못한 주문은 CANCELING(취소 선점) 후 CANCELED
 CREATE TABLE group_buy_payments (
     id            BIGSERIAL PRIMARY KEY,
     order_id      VARCHAR(64)  NOT NULL UNIQUE,
@@ -9,6 +10,7 @@ CREATE TABLE group_buy_payments (
     amount        INT          NOT NULL CHECK (amount > 0),
     status        VARCHAR(10)  NOT NULL DEFAULT 'READY',
     payment_key   VARCHAR(200) UNIQUE,
+    approving_at  TIMESTAMPTZ,
     paid_at       TIMESTAMPTZ,
     canceled_at   TIMESTAMPTZ,
     cancel_reason VARCHAR(200),

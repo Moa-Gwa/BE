@@ -86,9 +86,14 @@ class GroupBuyService {
 
     @Transactional
     void close(long id, long me) {
-        long hostId = groupBuys.findHostId(id).orElseThrow(GroupBuyService::notFound);
-        if (hostId != me) {
+        LockedGroupBuy groupBuy = groupBuys.lock(id).orElseThrow(GroupBuyService::notFound);
+        if (groupBuy.hostId() != me) {
             throw ApiException.forbidden("모집을 연 사람만 마감할 수 있습니다.");
+        }
+        // 결제 모집은 목표 미달로 마감하면 환불 대상에서 빠지므로 진행하지 않으려면 모집 취소 사용
+        if (payments.required(groupBuy.unitPrice())
+                && groupBuys.sumQuantityOfOthers(id, 0) < groupBuy.targetQuantity()) {
+            throw new ApiException(HttpStatus.CONFLICT, "목표 수량을 채워야 마감할 수 있습니다. 진행하지 않으려면 모집을 취소해 주세요.");
         }
         groupBuys.close(id);
     }

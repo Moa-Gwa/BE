@@ -133,6 +133,53 @@ class GroupBuyPaymentTest {
         verify(toss).cancel("pk-" + c, c, "모집 취소");
     }
 
+    @Test
+    void rejectedAndStaleApprovalsSettleWithoutJoining() throws Exception {
+        long id = createGroupBuy(1000, 5);
+        String rejected = order(id, buyer, 1).get("orderId").asText();
+        when(toss.confirm(anyString(), eq(rejected), anyLong()))
+                .thenThrow(com.moagwa.common.exception.ApiException.badRequest("카드 한도가 초과되었습니다."));
+        confirm(buyer, "pk-" + rejected, rejected, 1000).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("카드 한도가 초과되었습니다."));
+        assertThat(paymentStatus(rejected)).isEqualTo("FAILED");
+        assertThat(participantCount(id)).isZero();
+
+        // 결제사 승인 후 저장이 끝나지 않고 남은 주문은 정리 작업이 결제를 취소
+        String stale = order(id, other, 2).get("orderId").asText();
+        jdbc.update("UPDATE group_buy_payments SET status = 'APPROVING', payment_key = ?, "
+                + "approving_at = now() - interval '11 minutes' WHERE order_id = ?", "pk-" + stale, stale);
+        // 승인 중 수량은 다른 사람의 남은 수량에서도 미리 제외
+        perform(post("/api/market/group-buys/" + id + "/payments"), buyer, "{\"quantity\":4}")
+                .andExpect(status().isConflict());
+        paymentService.refundFailedGroupBuys();
+        verify(toss).cancel("pk-" + stale, stale, "승인 처리 실패로 자동 취소");
+        assertThat(paymentStatus(stale)).isEqualTo("CANCELED");
+    }
+
+    @Test
+    void groupCanceledDuringApprovalRefundsInsteadOfJoining() throws Exception {
+        long id = createGroupBuy(1000, 5);
+        String orderId = order(id, buyer, 1).get("orderId").asText();
+        // 결제사 승인을 기다리는 사이 주최자가 모집 취소
+        when(toss.confirm(anyString(), eq(orderId), anyLong())).thenAnswer(inv -> {
+            jdbc.update("UPDATE group_buys SET status = 'CANCELED' WHERE id = ?", id);
+            return new TossPaymentsClient.Payment(inv.getArgument(0), orderId, "DONE", 1000);
+        });
+        confirm(buyer, "pk-" + orderId, orderId, 1000).andExpect(status().isConflict());
+        verify(toss).cancel("pk-" + orderId, orderId, "결제 처리 중 오류로 자동 취소");
+        assertThat(paymentStatus(orderId)).isEqualTo("CANCELED");
+        assertThat(participantCount(id)).isZero();
+    }
+
+    @Test
+    void paidGroupClosesOnlyAfterReachingTarget() throws Exception {
+        long id = createGroupBuy(1000, 3);
+        paidOrder(id, buyer, 2);
+        perform(post("/api/market/group-buys/" + id + "/close"), host, null).andExpect(status().isConflict());
+        paidOrder(id, other, 1);
+        perform(post("/api/market/group-buys/" + id + "/close"), host, null).andExpect(status().isNoContent());
+    }
+
     private String paidOrder(long id, User user, int quantity) throws Exception {
         JsonNode order = order(id, user, quantity);
         String orderId = order.get("orderId").asText();

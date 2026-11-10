@@ -24,6 +24,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 class GroupBuyPaymentService {
 
     private static final int REFUND_BATCH = 50;
+    /** 승인 요청 후 이 시간이 지나도 승인 중이면 저장 실패로 보고 정리 */
+    private static final int STALE_APPROVING_MINUTES = 10;
 
     private final GroupBuyPaymentRepository payments;
     private final GroupBuyRepository groupBuys;
@@ -62,15 +64,59 @@ class GroupBuyPaymentService {
         return new PaymentOrder(orderId, amount, name.length() > 100 ? name.substring(0, 100) : name);
     }
 
-    /** 결제위젯 성공 후 승인. 같은 주문을 다시 승인하면 결과만 반환 */
-    @Transactional
+    /**
+     * 결제위젯 성공 후 승인. 같은 주문을 다시 승인하면 결과만 반환.
+     * 승인 중 상태를 먼저 커밋해, 결제사 승인 뒤 저장이 실패해도 정리 작업이 결제를 취소할 수 있게 함
+     */
     long confirm(String paymentKey, String orderId, long amount, long me) {
+        Order order = tx.execute(s -> reserve(paymentKey, orderId, amount, me));
+        if ("PAID".equals(order.status())) {
+            return order.groupBuyId();
+        }
+        TossPaymentsClient.Payment approved;
+        try {
+            approved = toss.confirm(paymentKey, orderId, amount);
+        } catch (ApiException e) {
+            // 카드 거절 등 확정된 실패만 FAILED. 결제사 응답 불명은 승인 중으로 두고 정리 작업이 확정
+            if (e.status() == HttpStatus.BAD_REQUEST) {
+                tx.executeWithoutResult(s -> payments.markFailed(orderId));
+            }
+            throw e;
+        }
+        if (!"DONE".equals(approved.status()) || approved.totalAmount() != amount) {
+            cancelApproved(orderId, paymentKey, "승인 결과 불일치로 자동 취소");
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "결제 승인 결과를 확인하지 못해 결제를 취소했습니다.");
+        }
+        try {
+            tx.executeWithoutResult(s -> {
+                // 승인을 기다리는 사이 모집이 취소됐으면 참여 확정 대신 결제 취소
+                LockedGroupBuy g = groupBuys.lock(order.groupBuyId()).orElseThrow(GroupBuyPaymentService::notFound);
+                if ("CANCELED".equals(g.status())) {
+                    throw new ApiException(HttpStatus.CONFLICT, "모집이 취소되어 결제를 취소했습니다.");
+                }
+                if (payments.markPaid(orderId) == 0) {
+                    throw new ApiException(HttpStatus.CONFLICT, "결제 처리 시간이 초과되어 결제를 취소했습니다.");
+                }
+                groupBuys.saveParticipant(order.groupBuyId(), me, order.quantity());
+            });
+        } catch (RuntimeException e) {
+            cancelApproved(orderId, paymentKey, "결제 처리 중 오류로 자동 취소");
+            throw e;
+        }
+        return order.groupBuyId();
+    }
+
+    /** 승인 전 확인 후 승인 중으로 표시. 여기서 막히면 결제는 승인되지 않음 */
+    private Order reserve(String paymentKey, String orderId, long amount, long me) {
         Order order = payments.lock(orderId).orElseThrow(() -> ApiException.notFound("주문을 찾을 수 없습니다."));
         if (order.userId() != me) {
             throw ApiException.forbidden("본인 주문만 결제할 수 있습니다.");
         }
         if ("PAID".equals(order.status()) && paymentKey.equals(order.paymentKey())) {
-            return order.groupBuyId();
+            return order;
+        }
+        if ("APPROVING".equals(order.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "결제를 처리하고 있습니다. 잠시 후 다시 확인해 주세요.");
         }
         if (!"READY".equals(order.status())) {
             throw new ApiException(HttpStatus.CONFLICT, "이미 처리된 주문입니다.");
@@ -78,24 +124,23 @@ class GroupBuyPaymentService {
         if (amount != order.amount()) {
             throw ApiException.badRequest("결제 금액이 주문 금액과 다릅니다.");
         }
-        // 결제 승인 전에 다시 확인. 여기서 막히면 결제는 승인되지 않음
         LockedGroupBuy g = groupBuys.lock(order.groupBuyId()).orElseThrow(GroupBuyPaymentService::notFound);
         checkJoinable(g, order.groupBuyId(), order.quantity(), me);
+        payments.markApproving(orderId, paymentKey);
+        return order;
+    }
 
-        TossPaymentsClient.Payment paid = toss.confirm(paymentKey, orderId, amount);
-        if (!"DONE".equals(paid.status()) || paid.totalAmount() != amount) {
-            toss.cancel(paymentKey, orderId, "승인 결과 불일치로 자동 취소");
-            throw new ApiException(HttpStatus.BAD_GATEWAY, "결제 승인 결과를 확인하지 못해 결제를 취소했습니다.");
-        }
+    /** 승인됐지만 참여를 확정하지 못한 결제 취소. 실패하면 정리 작업이 다시 시도 */
+    private void cancelApproved(String orderId, String paymentKey, String reason) {
         try {
-            payments.markPaid(orderId, paymentKey);
-            groupBuys.saveParticipant(order.groupBuyId(), me, order.quantity());
+            if (!Boolean.TRUE.equals(tx.execute(s -> payments.claimCancel(orderId)))) {
+                return;
+            }
+            toss.cancel(paymentKey, orderId, reason);
+            tx.executeWithoutResult(s -> payments.markApprovalCanceled(orderId, reason));
         } catch (RuntimeException e) {
-            // shortcut: 커밋 단계 실패는 잡지 못함. 저장 쿼리 실패만 결제 취소로 되돌림
-            toss.cancel(paymentKey, orderId, "결제 처리 중 오류로 자동 취소");
-            throw e;
+            log.warn("Cancel after approval failed, will retry: orderId={}", orderId, e);
         }
-        return order.groupBuyId();
     }
 
     /** 참여 취소 시 결제 완료 주문이 있으면 전액 환불. 환불 실패 시 예외로 참여 취소도 막음 */
@@ -134,11 +179,32 @@ class GroupBuyPaymentService {
         if (!toss.enabled()) {
             return;
         }
+        resolveStaleApprovals();
         int canceled = payments.cancelUnmetGroupBuys();
         if (canceled > 0) {
             log.info("Canceled {} group buys that missed their target", canceled);
         }
         refundCanceled(0);
+    }
+
+    /** 승인 중으로 오래 남은 주문은 결제 취소로 확정. 결제사에 승인 기록이 없으면 실패로 정리 */
+    private void resolveStaleApprovals() {
+        for (Order order : payments.findStaleApproving(STALE_APPROVING_MINUTES, REFUND_BATCH)) {
+            try {
+                // 먼저 취소를 선점해, 늦게 끝난 승인 처리가 이 주문을 결제 완료로 바꾸지 못하게 함
+                if (!Boolean.TRUE.equals(tx.execute(s -> payments.claimCancel(order.orderId())))) {
+                    continue;
+                }
+                toss.cancel(order.paymentKey(), order.orderId(), "승인 처리 실패로 자동 취소");
+                tx.executeWithoutResult(s -> payments.markApprovalCanceled(order.orderId(), "승인 처리 실패로 자동 취소"));
+            } catch (ApiException e) {
+                if (e.status() == HttpStatus.BAD_REQUEST) {
+                    tx.executeWithoutResult(s -> payments.markFailed(order.orderId()));
+                } else {
+                    log.warn("Stale approval cleanup failed, will retry: orderId={}", order.orderId(), e);
+                }
+            }
+        }
     }
 
     private void refundCanceled(long groupBuyId) {
@@ -166,10 +232,11 @@ class GroupBuyPaymentService {
         if (!g.open()) {
             throw new ApiException(HttpStatus.CONFLICT, "이미 마감된 모집입니다.");
         }
-        if (payments.findPaidOrderId(groupBuyId, me).isPresent()) {
+        if (payments.hasActiveOrder(groupBuyId, me)) {
             throw new ApiException(HttpStatus.CONFLICT, "이미 참여 중입니다. 수량을 바꾸려면 참여를 취소한 뒤 다시 신청해 주세요.");
         }
-        if (groupBuys.sumQuantityOfOthers(groupBuyId, me) + quantity > g.targetQuantity()) {
+        int taken = groupBuys.sumQuantityOfOthers(groupBuyId, me) + payments.sumApprovingOfOthers(groupBuyId, me);
+        if (taken + quantity > g.targetQuantity()) {
             throw new ApiException(HttpStatus.CONFLICT, "남은 수량이 부족합니다.");
         }
     }

@@ -34,6 +34,65 @@ class GroupBuyPaymentRepository {
                 .stream().findFirst();
     }
 
+    /** 결제 완료·승인 중·취소 처리 중인 주문(같은 사람의 중복 결제 방지) */
+    boolean hasActiveOrder(long groupBuyId, long userId) {
+        Integer n = jdbc.queryForObject("""
+                SELECT count(*) FROM group_buy_payments
+                 WHERE group_buy_id = :gb AND user_id = :user AND status IN ('APPROVING', 'PAID', 'CANCELING')""",
+                new MapSqlParameterSource().addValue("gb", groupBuyId).addValue("user", userId), Integer.class);
+        return n != null && n > 0;
+    }
+
+    /** 다른 사람의 승인 중 수량. 승인이 끝나기 전에도 남은 수량에서 미리 제외 */
+    int sumApprovingOfOthers(long groupBuyId, long userId) {
+        return jdbc.queryForObject("""
+                SELECT COALESCE(sum(quantity), 0) FROM group_buy_payments
+                 WHERE group_buy_id = :gb AND user_id <> :user AND status = 'APPROVING'""",
+                new MapSqlParameterSource().addValue("gb", groupBuyId).addValue("user", userId), Integer.class);
+    }
+
+    void markApproving(String orderId, String paymentKey) {
+        jdbc.update("""
+                UPDATE group_buy_payments SET status = 'APPROVING', payment_key = :key, approving_at = now()
+                 WHERE order_id = :order AND status = 'READY'""",
+                new MapSqlParameterSource().addValue("order", orderId).addValue("key", paymentKey));
+    }
+
+    void markFailed(String orderId) {
+        jdbc.update("""
+                UPDATE group_buy_payments SET status = 'FAILED'
+                 WHERE order_id = :order AND status IN ('APPROVING', 'CANCELING')""",
+                new MapSqlParameterSource("order", orderId));
+    }
+
+    /** 승인 중 주문의 취소 선점. 선점한 주문은 결제 완료로 바뀌지 않음. 이미 선점된 주문도 true */
+    boolean claimCancel(String orderId) {
+        return jdbc.update("""
+                UPDATE group_buy_payments SET status = 'CANCELING'
+                 WHERE order_id = :order AND status IN ('APPROVING', 'CANCELING')""",
+                new MapSqlParameterSource("order", orderId)) > 0;
+    }
+
+    /** 승인됐지만 참여 확정 전에 취소한 결제 */
+    void markApprovalCanceled(String orderId, String reason) {
+        jdbc.update("""
+                UPDATE group_buy_payments SET status = 'CANCELED', canceled_at = now(), cancel_reason = :reason
+                 WHERE order_id = :order AND status = 'CANCELING'""",
+                new MapSqlParameterSource().addValue("order", orderId).addValue("reason", reason));
+    }
+
+    /** 승인 중으로 오래 남은 주문(승인 후 저장 실패 등). 정리 작업이 결제 취소로 확정 */
+    List<Order> findStaleApproving(int minutes, int limit) {
+        return jdbc.query("""
+                SELECT * FROM group_buy_payments
+                 WHERE (status = 'APPROVING' AND approving_at < now() - make_interval(mins => :minutes))
+                    OR status = 'CANCELING'
+                 ORDER BY id LIMIT :limit""",
+                new MapSqlParameterSource().addValue("minutes", minutes).addValue("limit", limit),
+                (rs, n) -> new Order(rs.getString("order_id"), rs.getLong("group_buy_id"), rs.getLong("user_id"),
+                        rs.getInt("quantity"), rs.getInt("amount"), rs.getString("status"), rs.getString("payment_key")));
+    }
+
     Optional<String> findPaidOrderId(long groupBuyId, long userId) {
         return jdbc.queryForList("""
                 SELECT order_id FROM group_buy_payments
@@ -42,11 +101,11 @@ class GroupBuyPaymentRepository {
                 .stream().findFirst();
     }
 
-    void markPaid(String orderId, String paymentKey) {
-        jdbc.update("""
-                UPDATE group_buy_payments SET status = 'PAID', payment_key = :key, paid_at = now()
-                 WHERE order_id = :order AND status = 'READY'""",
-                new MapSqlParameterSource().addValue("order", orderId).addValue("key", paymentKey));
+    /** 승인 중 → 결제 완료. 바뀐 행이 없으면 다른 처리(정리 작업 등)가 먼저 끝난 상태 */
+    int markPaid(String orderId) {
+        return jdbc.update("""
+                UPDATE group_buy_payments SET status = 'PAID', paid_at = now()
+                 WHERE order_id = :order AND status = 'APPROVING'""", new MapSqlParameterSource("order", orderId));
     }
 
     void markCanceled(String orderId, String reason) {
