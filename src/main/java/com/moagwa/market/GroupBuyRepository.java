@@ -30,7 +30,12 @@ class GroupBuyRepository {
     record DetailExtra(String description, long hostId, int participants) {
     }
 
-    record LockedGroupBuy(int targetQuantity, String status, Instant deadlineAt) {
+    record LockedGroupBuy(int targetQuantity, String status, Instant deadlineAt, long hostId, int unitPrice,
+                          String title) {
+
+        boolean open() {
+            return "RECRUITING".equals(status) && deadlineAt.isAfter(Instant.now());
+        }
     }
 
     List<GroupBuySummary> findRecruiting(String query, long viewerId, PageWindow window) {
@@ -81,10 +86,12 @@ class GroupBuyRepository {
 
     /** 호출하는 트랜잭션이 끝날 때까지 모집 행을 잠가 목표 수량을 넘지 않게 한다. */
     Optional<LockedGroupBuy> lock(long id) {
-        return jdbc.query("SELECT target_quantity, status, deadline_at FROM group_buys WHERE id = :id FOR UPDATE",
-                new MapSqlParameterSource("id", id),
+        return jdbc.query("""
+                SELECT target_quantity, status, deadline_at, host_id, unit_price, title
+                  FROM group_buys WHERE id = :id FOR UPDATE""", new MapSqlParameterSource("id", id),
                 (rs, n) -> new LockedGroupBuy(rs.getInt("target_quantity"), rs.getString("status"),
-                        rs.getTimestamp("deadline_at").toInstant())).stream().findFirst();
+                        rs.getTimestamp("deadline_at").toInstant(), rs.getLong("host_id"), rs.getInt("unit_price"),
+                        rs.getString("title"))).stream().findFirst();
     }
 
     int sumQuantityOfOthers(long id, long userId) {
@@ -109,6 +116,10 @@ class GroupBuyRepository {
         Integer count = jdbc.queryForObject("SELECT count(*) FROM group_buys g WHERE g.id = :id AND " + RECRUITING,
                 new MapSqlParameterSource("id", id), Integer.class);
         return count != null && count > 0;
+    }
+
+    void cancel(long id) {
+        jdbc.update("UPDATE group_buys SET status = 'CANCELED' WHERE id = :id", new MapSqlParameterSource("id", id));
     }
 
     void close(long id) {
