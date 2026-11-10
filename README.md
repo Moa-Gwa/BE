@@ -95,6 +95,7 @@ scripts/run-local.sh
 | `JWT_SECRET` | 자체 JWT 서명 키 |
 | `FIREBASE_CREDENTIALS_PATH` | Firebase 서비스 계정 JSON 경로 |
 | `KAKAO_CLIENT_ID` | 카카오 REST API 키 |
+| `TOSS_SECRET_KEY` | 토스페이먼츠 결제위젯 시크릿 키(`test_gsk_`/`live_gsk_`). 서버 전용, 비어 있으면 결제 기능 비활성화(유료 같이 사기도 결제 없이 참여) |
 | `KAKAO_CLIENT_SECRET` | 카카오 선택적 보안 키 |
 | `GOOGLE_ALLOWED_EMAIL_DOMAIN` | Google 로그인 허용 이메일 도메인 |
 | `CORS_ALLOWED_ORIGINS` | 프론트엔드 허용 주소 |
