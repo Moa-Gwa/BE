@@ -77,7 +77,8 @@ class GroupBuyPaymentTest {
         mvc.perform(get("/api/market/group-buys/" + id).header("Authorization", token(buyer)))
                 .andExpect(jsonPath("$.myPaid").value(false)).andExpect(jsonPath("$.participationFee").value(500));
         confirm(buyer, "pk-" + orderId, orderId, 500).andExpect(status().isOk())
-                .andExpect(jsonPath("$.summary.myQuantity").value(2)).andExpect(jsonPath("$.myPaid").value(true));
+                .andExpect(jsonPath("$.summary.myQuantity").value(2)).andExpect(jsonPath("$.myPaid").value(true))
+                .andExpect(jsonPath("$.myPaidAmount").value(500));
         // 성공 페이지 새로고침 등 같은 승인 재요청은 결과만 반환
         confirm(buyer, "pk-" + orderId, orderId, 500).andExpect(status().isOk());
         verify(toss, times(1)).confirm(anyString(), eq(orderId), anyLong());
@@ -94,6 +95,18 @@ class GroupBuyPaymentTest {
         verify(toss).cancel("pk-" + orderId, orderId, "참여 취소");
         assertThat(paymentStatus(orderId)).isEqualTo("CANCELED");
         assertThat(participantCount(id)).isZero();
+    }
+
+    @Test
+    void legacyPaymentShowsItsActualAmount() throws Exception {
+        long id = createGroupBuy(3000, 3);
+        // 참가비 도입 전 단가 × 수량으로 결제한 주문은 실제 금액을 그대로 안내·환불
+        jdbc.update("""
+                INSERT INTO group_buy_payments (order_id, group_buy_id, user_id, quantity, amount, status, payment_key, paid_at)
+                VALUES (?, ?, ?, 2, 6000, 'PAID', ?, now())""", "legacy-" + id, id, buyer.getId(), "pk-legacy-" + id);
+        mvc.perform(get("/api/market/group-buys/" + id).header("Authorization", token(buyer)))
+                .andExpect(jsonPath("$.myPaid").value(true)).andExpect(jsonPath("$.myPaidAmount").value(6000))
+                .andExpect(jsonPath("$.participationFee").value(500));
     }
 
     @Test

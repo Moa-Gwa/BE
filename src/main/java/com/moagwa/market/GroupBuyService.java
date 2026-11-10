@@ -109,9 +109,10 @@ class GroupBuyService {
     private GroupBuyDetail detail(long id, long me) {
         GroupBuySummary summary = groupBuys.findSummary(id, me).orElseThrow(GroupBuyService::notFound);
         DetailExtra extra = groupBuys.findDetailExtra(id).orElseThrow(GroupBuyService::notFound);
+        int paidAmount = payments.paidAmount(id, me);
         return new GroupBuyDetail(summary, extra.description(), extra.hostId() == me, extra.participants(),
                 payments.required(), payments.required() ? GroupBuyPaymentService.PARTICIPATION_FEE : 0,
-                payments.paid(id, me));
+                paidAmount > 0, paidAmount);
     }
 
     private static ApiException notFound() {

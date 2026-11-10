@@ -93,6 +93,15 @@ class GroupBuyPaymentRepository {
                         rs.getInt("quantity"), rs.getInt("amount"), rs.getString("status"), rs.getString("payment_key")));
     }
 
+    /** 결제 완료 주문의 실제 결제 금액. 참가비 도입 전 주문은 단가 × 수량 */
+    Optional<Integer> findPaidAmount(long groupBuyId, long userId) {
+        return jdbc.queryForList("""
+                SELECT amount FROM group_buy_payments
+                 WHERE group_buy_id = :gb AND user_id = :user AND status = 'PAID'""",
+                new MapSqlParameterSource().addValue("gb", groupBuyId).addValue("user", userId), Integer.class)
+                .stream().findFirst();
+    }
+
     Optional<String> findPaidOrderId(long groupBuyId, long userId) {
         return jdbc.queryForList("""
                 SELECT order_id FROM group_buy_payments

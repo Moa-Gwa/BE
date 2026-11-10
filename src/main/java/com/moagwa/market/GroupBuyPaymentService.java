@@ -48,8 +48,9 @@ class GroupBuyPaymentService {
         return toss.enabled();
     }
 
-    boolean paid(long groupBuyId, long userId) {
-        return payments.findPaidOrderId(groupBuyId, userId).isPresent();
+    /** 내 결제 완료 금액(환불될 금액). 결제 완료 주문이 없으면 0 */
+    int paidAmount(long groupBuyId, long userId) {
+        return payments.findPaidAmount(groupBuyId, userId).orElse(0);
     }
 
     @Transactional
