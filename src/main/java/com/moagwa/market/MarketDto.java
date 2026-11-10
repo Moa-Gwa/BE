@@ -63,7 +63,24 @@ final class MarketDto {
                            int myQuantity, String createdAt) {
     }
 
-    record GroupBuyDetail(GroupBuySummary summary, String description, boolean mine, int participants) {
+    /**
+     * paymentRequired: 결제 후 참여(유료 모집이고 결제 기능이 켜진 경우)
+     * myPaid: 내 참여가 결제 완료 상태인지. 결제 기능 도입 전 참여자는 false
+     */
+    record GroupBuyDetail(GroupBuySummary summary, String description, boolean mine, int participants,
+                          boolean paymentRequired, boolean myPaid) {
+    }
+
+    /** 결제위젯에 넘길 주문. 금액은 서버가 단가 × 수량으로 계산 */
+    record PaymentOrder(String orderId, int amount, String orderName) {
+    }
+
+    record PaymentConfirmRequest(@NotBlank @Size(max = 200) String paymentKey,
+                                 @NotBlank @Size(max = 64) String orderId, @NotNull Long amount) {
+    }
+
+    /** 주최자 화면의 참여자별 결제 상태 */
+    record ParticipantView(String nickname, int quantity, boolean paid, String joinedAt) {
     }
 
     record GroupBuyPage(List<GroupBuySummary> items, int page, int size, boolean hasNext) {

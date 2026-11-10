@@ -24,6 +24,7 @@ class GroupBuyService {
     private static final int MY_LIST_LIMIT = 100;
 
     private final GroupBuyRepository groupBuys;
+    private final GroupBuyPaymentService payments;
     private final ChatService chats;
 
     @Transactional(readOnly = true)
@@ -61,9 +62,11 @@ class GroupBuyService {
     @Transactional
     GroupBuyDetail join(long id, int quantity, long me) {
         LockedGroupBuy groupBuy = groupBuys.lock(id).orElseThrow(GroupBuyService::notFound);
-        boolean open = "RECRUITING".equals(groupBuy.status()) && groupBuy.deadlineAt().isAfter(Instant.now());
-        if (!open) {
+        if (!groupBuy.open()) {
             throw new ApiException(HttpStatus.CONFLICT, "이미 마감된 모집입니다.");
+        }
+        if (payments.required(groupBuy.unitPrice())) {
+            throw new ApiException(HttpStatus.CONFLICT, "결제 후 참여할 수 있습니다.");
         }
         if (groupBuys.sumQuantityOfOthers(id, me) + quantity > groupBuy.targetQuantity()) {
             throw new ApiException(HttpStatus.CONFLICT, "남은 수량이 부족합니다.");
@@ -77,6 +80,7 @@ class GroupBuyService {
         if (!groupBuys.isRecruiting(id)) {
             throw new ApiException(HttpStatus.CONFLICT, "마감된 모집은 참여를 취소할 수 없습니다.");
         }
+        payments.refundMember(id, me);
         groupBuys.deleteParticipant(id, me);
     }
 
@@ -97,7 +101,8 @@ class GroupBuyService {
     private GroupBuyDetail detail(long id, long me) {
         GroupBuySummary summary = groupBuys.findSummary(id, me).orElseThrow(GroupBuyService::notFound);
         DetailExtra extra = groupBuys.findDetailExtra(id).orElseThrow(GroupBuyService::notFound);
-        return new GroupBuyDetail(summary, extra.description(), extra.hostId() == me, extra.participants());
+        return new GroupBuyDetail(summary, extra.description(), extra.hostId() == me, extra.participants(),
+                payments.required(summary.unitPrice()), payments.paid(id, me));
     }
 
     private static ApiException notFound() {
