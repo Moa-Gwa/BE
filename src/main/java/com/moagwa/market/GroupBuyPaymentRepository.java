@@ -115,11 +115,11 @@ class GroupBuyPaymentRepository {
                 new MapSqlParameterSource().addValue("order", orderId).addValue("reason", reason));
     }
 
-    /** 마감 시각까지 목표 수량을 못 채운 유료 모집을 취소 상태로 바꾸고 바뀐 수 반환 */
+    /** 마감 시각까지 목표 수량을 못 채운 모집을 취소 상태로 바꾸고 바뀐 수 반환 */
     int cancelUnmetGroupBuys() {
         return jdbc.update("""
                 UPDATE group_buys g SET status = 'CANCELED'
-                 WHERE g.status = 'RECRUITING' AND g.deadline_at <= now() AND g.unit_price > 0
+                 WHERE g.status = 'RECRUITING' AND g.deadline_at <= now()
                    AND (SELECT COALESCE(sum(p.quantity), 0) FROM group_buy_participants p
                          WHERE p.group_buy_id = g.id) < g.target_quantity""", new MapSqlParameterSource());
     }

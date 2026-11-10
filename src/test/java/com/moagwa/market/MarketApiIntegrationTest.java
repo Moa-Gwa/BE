@@ -70,7 +70,7 @@ class MarketApiIntegrationTest {
 
     private long createItem(User by, String title) throws Exception {
         Map<String, Object> body = Map.of("title", title, "description", "상태 좋아요", "price", 12000,
-                "category", "BOOK", "tradePlace", "중앙도서관 앞");
+                "category", "BOOK", "tradePlace", "중앙도서관 앞", "imageUrls", List.of("/uploads/i.png"));
         MvcResult r = mvc.perform(post("/api/market/items").header("Authorization", token(by))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
                 .andExpect(status().isCreated()).andReturn();
@@ -178,7 +178,7 @@ class MarketApiIntegrationTest {
     @Test
     void onlySellerCanChangeOrDeleteItem() throws Exception {
         long id = createItem(seller, "남의 물품 " + tag);
-        Map<String, Object> body = Map.of("title", "바꿈", "price", 1, "category", "BOOK");
+        Map<String, Object> body = Map.of("title", "바꿈", "price", 1, "category", "BOOK", "imageUrls", List.of("/uploads/i.png"));
 
         mvc.perform(put("/api/market/items/" + id).header("Authorization", token(buyer))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
@@ -210,7 +210,7 @@ class MarketApiIntegrationTest {
     @Test
     void groupBuyJoinRespectsTargetQuantityAndDeadline() throws Exception {
         Map<String, Object> body = Map.of("title", "잉크 같이 사요 " + tag, "unitPrice", 9000, "targetQuantity", 3,
-                "deadlineAt", Instant.now().plus(2, ChronoUnit.DAYS).toString(), "pickupPlace", "도서관 1층");
+                "deadlineAt", Instant.now().plus(2, ChronoUnit.DAYS).toString(), "pickupPlace", "도서관 1층", "imageUrl", "/uploads/g.png");
         MvcResult created = mvc.perform(post("/api/market/group-buys").header("Authorization", token(seller))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.summary.status").value("RECRUITING")).andReturn();
@@ -241,7 +241,7 @@ class MarketApiIntegrationTest {
     void searchMatchesDescriptionsAndTreatsWildcardsLiterally() throws Exception {
         String keyword = tag + " 할인100%_ABC";
         Map<String, Object> item = Map.of("title", "검색용 물품", "description", keyword,
-                "price", 1000, "category", "BOOK");
+                "price", 1000, "category", "BOOK", "imageUrls", List.of("/uploads/i.png"));
         mvc.perform(post("/api/market/items").header("Authorization", token(seller))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(item)))
                 .andExpect(status().isCreated());
@@ -255,7 +255,7 @@ class MarketApiIntegrationTest {
 
         Map<String, Object> group = Map.of("title", "검색용 모집", "description", keyword,
                 "unitPrice", 1000, "targetQuantity", 3,
-                "deadlineAt", Instant.now().plus(2, ChronoUnit.DAYS).toString());
+                "deadlineAt", Instant.now().plus(2, ChronoUnit.DAYS).toString(), "imageUrl", "/uploads/g.png");
         MvcResult created = mvc.perform(post("/api/market/group-buys").header("Authorization", token(seller))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(group)))
                 .andExpect(status().isCreated()).andReturn();
@@ -281,7 +281,7 @@ class MarketApiIntegrationTest {
     @Test
     void groupBuyRejectsPastDeadline() throws Exception {
         Map<String, Object> body = Map.of("title", "지난 모집", "unitPrice", 1000, "targetQuantity", 2,
-                "deadlineAt", Instant.now().minus(1, ChronoUnit.HOURS).toString());
+                "deadlineAt", Instant.now().minus(1, ChronoUnit.HOURS).toString(), "imageUrl", "/uploads/g.png");
         mvc.perform(post("/api/market/group-buys").header("Authorization", token(seller))
                 .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
                 .andExpect(status().isBadRequest());
