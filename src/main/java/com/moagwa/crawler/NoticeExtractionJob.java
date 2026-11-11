@@ -109,12 +109,16 @@ class NoticeExtractionJob {
                         rs.getTimestamp("published_at").toInstant()));
     }
 
-    /** 게시판 분류로 정해진 카테고리는 유지하고 비어 있을 때만 채움 */
+    /** 게시판 분류로 정해진 카테고리는 유지하고 비어 있을 때만 채움. 운영자가 교정한 날짜는 덮어쓰지 않음 */
     private void save(long id, NoticeExtractor.Result r) {
         jdbc.update("""
                 UPDATE crawled_notices
-                   SET deadline_at = :deadline, event_start_at = :eventStart, event_end_at = :eventEnd,
-                       date_evidence = :evidence, keywords = :keywords, category = COALESCE(category, :category),
+                   SET deadline_at = CASE WHEN deadline_locked THEN deadline_at ELSE :deadline END,
+                       event_start_at = CASE WHEN event_locked THEN event_start_at ELSE :eventStart END,
+                       event_end_at = CASE WHEN event_locked THEN event_end_at ELSE :eventEnd END,
+                       -- 근거 문장은 두 날짜를 합친 값이라 한쪽이라도 교정되면 갱신하지 않음
+                       date_evidence = CASE WHEN deadline_locked OR event_locked THEN date_evidence ELSE :evidence END,
+                       keywords = :keywords, category = COALESCE(category, :category),
                        extracted_at = now()
                  WHERE id = :id""",
                 new MapSqlParameterSource().addValue("id", id)

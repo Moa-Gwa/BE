@@ -27,7 +27,8 @@ class SecurityConfig {
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http, JwtService jwt) throws Exception {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        // role 클레임은 ROLE_STUDENT / ROLE_ADMIN, verified 클레임(재학생 인증 완료)은 ROLE_VERIFIED가 된다.
+        // role 클레임은 ROLE_STUDENT / ROLE_ADMIN, verified 클레임(재학생 인증 완료)은 ROLE_VERIFIED,
+        // operator 클레임(서비스 운영자)은 ROLE_OPERATOR가 된다.
         converter.setJwtGrantedAuthoritiesConverter(jwtToken -> {
             List<GrantedAuthority> granted = new ArrayList<>();
             String role = jwtToken.getClaimAsString("role");
@@ -36,6 +37,9 @@ class SecurityConfig {
             }
             if (Boolean.TRUE.equals(jwtToken.getClaim("verified"))) {
                 granted.add(new SimpleGrantedAuthority("ROLE_VERIFIED"));
+            }
+            if (Boolean.TRUE.equals(jwtToken.getClaim("operator"))) {
+                granted.add(new SimpleGrantedAuthority("ROLE_OPERATOR"));
             }
             return granted;
         });
@@ -51,6 +55,8 @@ class SecurityConfig {
                                 "/api/organizations/**", "/api/categories", "/api/schedule").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/notices/*/view", "/api/crawled-notices/*/view")
                         .permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/crawled-notices/*/date-corrections").hasRole("STUDENT")
+                        .requestMatchers("/api/admin/date-corrections/**").hasRole("OPERATOR")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/market/**", "/api/me/market/**").hasRole("VERIFIED")
                         .requestMatchers("/ws", "/api/chats/**", "/api/me/chats").hasRole("VERIFIED")

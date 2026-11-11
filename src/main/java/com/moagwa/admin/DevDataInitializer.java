@@ -11,7 +11,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
- * Local development data only (profile "local"): one admin for each of three student-government organizations.
+ * Local development data only (profile "local"): one admin for each of three student-government organizations
+ * and one service operator.
  * Accounts that already exist are left alone, and organizations created by other seed data are reused.
  */
 @Slf4j
@@ -31,14 +32,23 @@ class DevDataInitializer implements CommandLineRunner {
         createAdminIfMissing("student-council", "총학생회 관리자", "총학생회");
         createAdminIfMissing("ai-council", "AI융합학부 관리자", "AI융합학부 학생회");
         createAdminIfMissing("cs-council", "컴퓨터정보공학부 관리자", "컴퓨터정보공학부 학생회");
+        createAdminIfMissing("operator", "모아과 운영자", "총학생회", true);
     }
 
     private void createAdminIfMissing(String loginId, String name, String orgName) {
+        createAdminIfMissing(loginId, name, orgName, false);
+    }
+
+    private void createAdminIfMissing(String loginId, String name, String orgName, boolean operator) {
         if (admins.findByLoginId(loginId).isPresent()) {
             return;
         }
         Organization org = organizations.findByName(orgName).orElseGet(() -> createOrganization(orgName));
-        admins.save(new Admin(loginId, encoder.encode(PASSWORD), name, org));
+        Admin admin = new Admin(loginId, encoder.encode(PASSWORD), name, org);
+        if (operator) {
+            admin.grantOperator();
+        }
+        admins.save(admin);
         log.info("개발용 관리자 계정을 생성했습니다: {}", loginId);
     }
 
