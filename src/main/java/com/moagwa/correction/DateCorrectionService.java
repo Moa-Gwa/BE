@@ -44,6 +44,7 @@ class DateCorrectionService {
         }
     }
 
+    /** 검토 대기는 오래된 요청부터, 처리 내역은 최근 처리한 요청부터 */
     @Transactional(readOnly = true)
     List<DateCorrectionView> list(String status) {
         if (!List.of("PENDING", "APPLIED", "REJECTED").contains(status)) {
@@ -56,7 +57,8 @@ class DateCorrectionService {
                   FROM notice_date_corrections r
                   JOIN crawled_notices c ON c.id = r.crawled_notice_id
                  WHERE r.status = :status
-                 ORDER BY r.created_at
+                 ORDER BY CASE WHEN r.status = 'PENDING' THEN r.created_at END,
+                          r.resolved_at DESC
                  LIMIT :limit""",
                 new MapSqlParameterSource().addValue("status", status).addValue("limit", LIST_LIMIT),
                 (rs, i) -> new DateCorrectionView(rs.getLong("id"), rs.getString("field"),

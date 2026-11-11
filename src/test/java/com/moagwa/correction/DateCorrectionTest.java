@@ -20,6 +20,7 @@ import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -177,6 +178,23 @@ class DateCorrectionTest {
 
     private String url() {
         return "/api/crawled-notices/" + noticeId + "/date-corrections";
+    }
+
+    @Test
+    void resolvedRequestsAreListedNewestFirst() throws Exception {
+        long earlier = request("{\"field\":\"DEADLINE\",\"suggestedStart\":\"2026-12-04\"}");
+        long later = request("{\"field\":\"EVENT\",\"suggestedStart\":\"2026-12-10\"}");
+        // 먼저 들어온 요청을 먼저 처리하고, 나중 요청을 방금 처리한 경우
+        jdbc.update("UPDATE notice_date_corrections SET status = 'REJECTED', resolved_at = now() - interval '1 hour' WHERE id = ?", earlier);
+        jdbc.update("UPDATE notice_date_corrections SET status = 'REJECTED', resolved_at = now() WHERE id = ?", later);
+
+        String body = mvc.perform(get("/api/admin/date-corrections").param("status", "REJECTED")
+                        .header("Authorization", operator))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        List<Long> mine = com.jayway.jsonpath.JsonPath.<List<Number>>read(body, "$[*].id").stream()
+                .map(Number::longValue).filter(id -> id == earlier || id == later).toList();
+
+        assertThat(mine).containsExactly(later, earlier); // 방금 처리한 요청이 먼저
     }
 
     private Instant deadline() {
