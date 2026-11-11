@@ -1,5 +1,7 @@
--- 운영자가 교정한 날짜. true면 자동 추출 결과로 덮어쓰지 않음
-ALTER TABLE crawled_notices ADD COLUMN dates_locked BOOLEAN NOT NULL DEFAULT false;
+-- 운영자가 교정한 날짜 항목. true면 해당 항목은 자동 추출 결과로 덮어쓰지 않음
+ALTER TABLE crawled_notices
+    ADD COLUMN deadline_locked BOOLEAN NOT NULL DEFAULT false,
+    ADD COLUMN event_locked    BOOLEAN NOT NULL DEFAULT false;
 
 -- 크롤링 공지 날짜 교정 요청. 학생이 요청하고 운영자가 반영·반려
 CREATE TABLE notice_date_corrections (

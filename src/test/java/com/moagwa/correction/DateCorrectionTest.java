@@ -29,11 +29,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 
-@SpringBootTest
+@SpringBootTest(properties = "moagwa.operator-login-ids=ops-a, " + DateCorrectionTest.CONFIGURED_OPERATOR)
 @AutoConfigureMockMvc
 class DateCorrectionTest {
+
+    static final String CONFIGURED_OPERATOR = "ops-configured";
 
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
@@ -43,6 +46,7 @@ class DateCorrectionTest {
     @Autowired OrganizationRepository organizations;
     @Autowired CrawlSourceRepository sources;
     @Autowired CrawledNoticeRepository crawled;
+    @Autowired PasswordEncoder encoder;
 
     private long noticeId;
     private long sourceId;
@@ -111,7 +115,7 @@ class DateCorrectionTest {
                 .isEqualTo("APPLIED");
         mvc.perform(post("/api/admin/date-corrections/" + id + "/reject").header("Authorization", operator))
                 .andExpect(status().isConflict());
-        assertThat(jdbc.queryForObject("SELECT dates_locked FROM crawled_notices WHERE id = ?", Boolean.class, noticeId))
+        assertThat(jdbc.queryForObject("SELECT deadline_locked AND NOT event_locked FROM crawled_notices WHERE id = ?", Boolean.class, noticeId))
                 .isTrue();
     }
 
@@ -126,6 +130,25 @@ class DateCorrectionTest {
         assertThat(deadline()).isEqualTo(before);
         // 반려 후에는 같은 항목을 다시 요청할 수 있음
         request("{\"field\":\"EVENT\",\"suggestedStart\":\"2026-12-10\"}");
+    }
+
+    @Test
+    void adminsListedInConfigLogInAsOperators() throws Exception {
+        Organization org = organizations.findById(orgId).orElseThrow();
+        Admin configured = admins.save(new Admin(CONFIGURED_OPERATOR, encoder.encode("pw-1234"), "운영자", org));
+        try {
+            mvc.perform(post("/api/admin/auth/login").header("X-Requested-With", "fetch")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"loginId\":\"" + CONFIGURED_OPERATOR + "\",\"password\":\"pw-1234\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.operator").value(true));
+            mvc.perform(post("/api/admin/auth/login").header("X-Requested-With", "fetch")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"loginId\":\"op-x\",\"password\":\"x\"}"))
+                    .andExpect(status().isUnauthorized());
+        } finally {
+            admins.delete(configured);
+        }
     }
 
     @Test

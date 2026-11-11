@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 크롤링 공지 날짜 교정 요청. 학생이 요청하고 운영자가 원문과 비교해 반영·반려한다.
- * 반영한 공지는 dates_locked로 표시해 자동 추출이 다시 덮어쓰지 않게 한다.
+ * 반영한 항목은 deadline_locked·event_locked로 표시해 자동 추출이 다시 덮어쓰지 않게 한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -77,14 +77,14 @@ class DateCorrectionService {
         if ("DEADLINE".equals(p.field())) {
             params.addValue("deadline", ts(body.deadlineAt()));
             jdbc.update("""
-                    UPDATE crawled_notices SET deadline_at = :deadline, date_evidence = NULL, dates_locked = true
+                    UPDATE crawled_notices SET deadline_at = :deadline, date_evidence = NULL, deadline_locked = true
                      WHERE id = :notice""", params);
         } else {
             body.validateEvent();
             params.addValue("start", ts(body.eventStartAt())).addValue("end", ts(body.eventEndAt()));
             jdbc.update("""
                     UPDATE crawled_notices SET event_start_at = :start, event_end_at = :end, date_evidence = NULL,
-                           dates_locked = true
+                           event_locked = true
                      WHERE id = :notice""", params);
         }
         jdbc.update("""
@@ -105,8 +105,15 @@ class DateCorrectionService {
     private record Pending(long noticeId, String field) {
     }
 
-    /** 대기 중인 요청을 잠그고 조회. 이미 처리된 요청이면 409 */
+    /**
+     * 대기 중인 요청을 잠그고 조회. 이미 처리된 요청이면 409.
+     * 같은 공지의 요청을 동시에 처리할 때 교착되지 않도록 공지 행을 먼저 잠근 뒤 요청 행을 잠근다
+     */
     private Pending pending(long correctionId) {
+        jdbc.query("""
+                SELECT c.id FROM crawled_notices c
+                 WHERE c.id = (SELECT crawled_notice_id FROM notice_date_corrections WHERE id = :id) FOR UPDATE""",
+                new MapSqlParameterSource("id", correctionId), (rs, i) -> rs.getLong(1));
         List<Pending> rows = jdbc.query("""
                 SELECT crawled_notice_id, field, status FROM notice_date_corrections WHERE id = :id FOR UPDATE""",
                 new MapSqlParameterSource("id", correctionId), (rs, i) -> "PENDING".equals(rs.getString("status"))

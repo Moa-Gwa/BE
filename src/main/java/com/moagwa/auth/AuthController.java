@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +57,10 @@ class AuthController {
     @Value("${moagwa.google.allowed-email-domain:}")
     private String googleAllowedEmailDomain;
 
+    /** 운영자로 로그인시킬 관리자 아이디(쉼표 구분). DB의 role과 함께 확인 */
+    @Value("${moagwa.operator-login-ids:}")
+    private List<String> operatorLoginIds;
+
     @PostMapping("/admin/auth/login")
     @Transactional(readOnly = true)
     AdminSession adminLogin(@Valid @RequestBody AdminLogin body, HttpServletResponse response) {
@@ -63,9 +68,11 @@ class AuthController {
                 .filter(a -> encoder.matches(body.password(), a.getPasswordHash()))
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."));
         var org = admin.getOrganization();
-        cookies.issue(response, jwt.issueAdmin(admin.getId(), org.getId(), admin.isOperator()));
+        boolean operator = admin.isOperator() || operatorLoginIds.stream().map(String::trim)
+                .anyMatch(admin.getLoginId()::equals);
+        cookies.issue(response, jwt.issueAdmin(admin.getId(), org.getId(), operator));
         return new AdminSession(admin.getName(), new OrgInfo(org.getId(), org.getName(), org.getType().name()),
-                admin.isOperator());
+                operator);
     }
 
     /** Exchanges a Kakao authorization code for our own session. Needs moagwa.kakao.client-id to be configured. */

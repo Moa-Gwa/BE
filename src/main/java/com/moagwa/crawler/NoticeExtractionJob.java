@@ -113,10 +113,11 @@ class NoticeExtractionJob {
     private void save(long id, NoticeExtractor.Result r) {
         jdbc.update("""
                 UPDATE crawled_notices
-                   SET deadline_at = CASE WHEN dates_locked THEN deadline_at ELSE :deadline END,
-                       event_start_at = CASE WHEN dates_locked THEN event_start_at ELSE :eventStart END,
-                       event_end_at = CASE WHEN dates_locked THEN event_end_at ELSE :eventEnd END,
-                       date_evidence = CASE WHEN dates_locked THEN date_evidence ELSE :evidence END,
+                   SET deadline_at = CASE WHEN deadline_locked THEN deadline_at ELSE :deadline END,
+                       event_start_at = CASE WHEN event_locked THEN event_start_at ELSE :eventStart END,
+                       event_end_at = CASE WHEN event_locked THEN event_end_at ELSE :eventEnd END,
+                       -- 근거 문장은 두 날짜를 합친 값이라 한쪽이라도 교정되면 갱신하지 않음
+                       date_evidence = CASE WHEN deadline_locked OR event_locked THEN date_evidence ELSE :evidence END,
                        keywords = :keywords, category = COALESCE(category, :category),
                        extracted_at = now()
                  WHERE id = :id""",
