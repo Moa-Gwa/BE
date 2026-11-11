@@ -41,9 +41,10 @@ class DevDataInitializerTest {
         initializer.run();
 
         ArgumentCaptor<Admin> saved = ArgumentCaptor.forClass(Admin.class);
-        verify(admins, times(3)).save(saved.capture());
+        verify(admins, times(4)).save(saved.capture());
         assertThat(saved.getAllValues()).extracting(Admin::getLoginId)
-                .containsExactly("student-council", "ai-council", "cs-council");
+                .containsExactly("student-council", "ai-council", "cs-council", "operator");
+        assertThat(saved.getAllValues()).extracting(Admin::isOperator).containsExactly(false, false, false, true);
         assertThat(saved.getAllValues().get(0).getOrganization()).isSameAs(existing);
     }
 

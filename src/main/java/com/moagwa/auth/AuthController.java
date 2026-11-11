@@ -63,8 +63,9 @@ class AuthController {
                 .filter(a -> encoder.matches(body.password(), a.getPasswordHash()))
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."));
         var org = admin.getOrganization();
-        cookies.issue(response, jwt.issueAdmin(admin.getId(), org.getId()));
-        return new AdminSession(admin.getName(), new OrgInfo(org.getId(), org.getName(), org.getType().name()));
+        cookies.issue(response, jwt.issueAdmin(admin.getId(), org.getId(), admin.isOperator()));
+        return new AdminSession(admin.getName(), new OrgInfo(org.getId(), org.getName(), org.getType().name()),
+                admin.isOperator());
     }
 
     /** Exchanges a Kakao authorization code for our own session. Needs moagwa.kakao.client-id to be configured. */
@@ -197,7 +198,8 @@ class AuthController {
     }
 
     /** 토큰은 응답 본문에 담지 않고 HttpOnly 쿠키로만 보낸다. */
-    record AdminSession(String name, OrgInfo organization) {
+    /** operator = 서비스 운영자 여부. 운영자 전용 화면 노출에 사용 */
+    record AdminSession(String name, OrgInfo organization, boolean operator) {
     }
 
     record StudentSession(String nickname, boolean onboarded, boolean verified) {

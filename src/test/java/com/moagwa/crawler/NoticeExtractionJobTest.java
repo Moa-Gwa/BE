@@ -92,6 +92,25 @@ class NoticeExtractionJobTest {
     }
 
     @Test
+    void operatorCorrectedDatesAreNotOverwritten() {
+        jdbc.update("UPDATE crawled_notices SET deadline_at = '2030-01-01T00:00:00Z', dates_locked = true WHERE id = ?",
+                noticeId);
+        ObjectNode answer = json.createObjectNode();
+        answer.put("deadlineDate", deadline.toString())
+                .put("deadlineEvidence", deadline.getMonthValue() + "월 " + deadline.getDayOfMonth() + "일 17:00까지")
+                .put("category", "SCHOLARSHIP").put("confidence", "HIGH");
+        answer.putArray("keywords").add("장학");
+        when(gemini.generateJson(anyString(), anyMap())).thenReturn(answer);
+
+        assertThat(job.extractPending(1)).isEqualTo(1);
+
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT deadline_at, keywords::text AS keywords FROM crawled_notices WHERE id = ?", noticeId);
+        assertThat(((java.sql.Timestamp) row.get("deadline_at")).toInstant()).isEqualTo(Instant.parse("2030-01-01T00:00:00Z"));
+        assertThat(row.get("keywords")).isEqualTo("{장학}"); // 날짜 외 값은 갱신
+    }
+
+    @Test
     void failedNoticesAreRetriedThenSkipped() {
         when(gemini.generateJson(anyString(), anyMap())).thenThrow(new IllegalStateException("boom"));
 
