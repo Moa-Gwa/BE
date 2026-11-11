@@ -93,6 +93,15 @@ class GroupBuyPaymentRepository {
                         rs.getInt("quantity"), rs.getInt("amount"), rs.getString("status"), rs.getString("payment_key")));
     }
 
+    /** 결제 완료 주문의 실제 결제 금액. 참가비 도입 전 주문은 단가 × 수량 */
+    Optional<Integer> findPaidAmount(long groupBuyId, long userId) {
+        return jdbc.queryForList("""
+                SELECT amount FROM group_buy_payments
+                 WHERE group_buy_id = :gb AND user_id = :user AND status = 'PAID'""",
+                new MapSqlParameterSource().addValue("gb", groupBuyId).addValue("user", userId), Integer.class)
+                .stream().findFirst();
+    }
+
     Optional<String> findPaidOrderId(long groupBuyId, long userId) {
         return jdbc.queryForList("""
                 SELECT order_id FROM group_buy_payments
@@ -115,11 +124,11 @@ class GroupBuyPaymentRepository {
                 new MapSqlParameterSource().addValue("order", orderId).addValue("reason", reason));
     }
 
-    /** 마감 시각까지 목표 수량을 못 채운 유료 모집을 취소 상태로 바꾸고 바뀐 수 반환 */
+    /** 마감 시각까지 목표 수량을 못 채운 모집을 취소 상태로 바꾸고 바뀐 수 반환 */
     int cancelUnmetGroupBuys() {
         return jdbc.update("""
                 UPDATE group_buys g SET status = 'CANCELED'
-                 WHERE g.status = 'RECRUITING' AND g.deadline_at <= now() AND g.unit_price > 0
+                 WHERE g.status = 'RECRUITING' AND g.deadline_at <= now()
                    AND (SELECT COALESCE(sum(p.quantity), 0) FROM group_buy_participants p
                          WHERE p.group_buy_id = g.id) < g.target_quantity""", new MapSqlParameterSource());
     }

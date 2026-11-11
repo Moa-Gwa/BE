@@ -45,7 +45,10 @@ class GroupBuyService {
         if (!body.deadlineAt().isAfter(Instant.now())) {
             throw ApiException.badRequest("마감 시각은 지금보다 뒤여야 합니다.");
         }
-        MarketInput.requireUploadedImages(body.imageUrl() == null ? null : List.of(body.imageUrl()));
+        if (body.imageUrl() == null || body.imageUrl().isBlank()) {
+            throw ApiException.badRequest("사진을 올려 주세요.");
+        }
+        MarketInput.requireUploadedImages(List.of(body.imageUrl()));
         long id = groupBuys.insert(me, new NewGroupBuy(body.title().trim(),
                 MarketInput.trimToEmpty(body.description()), body.unitPrice(), body.targetQuantity(),
                 body.deadlineAt(), MarketInput.trimToNull(body.pickupPlace()), body.imageUrl()));
@@ -65,8 +68,8 @@ class GroupBuyService {
         if (!groupBuy.open()) {
             throw new ApiException(HttpStatus.CONFLICT, "이미 마감된 모집입니다.");
         }
-        if (payments.required(groupBuy.unitPrice())) {
-            throw new ApiException(HttpStatus.CONFLICT, "결제 후 참여할 수 있습니다.");
+        if (payments.required()) {
+            throw new ApiException(HttpStatus.CONFLICT, "참가비를 결제한 뒤 참여할 수 있습니다.");
         }
         if (groupBuys.sumQuantityOfOthers(id, me) + quantity > groupBuy.targetQuantity()) {
             throw new ApiException(HttpStatus.CONFLICT, "남은 수량이 부족합니다.");
@@ -90,8 +93,8 @@ class GroupBuyService {
         if (groupBuy.hostId() != me) {
             throw ApiException.forbidden("모집을 연 사람만 마감할 수 있습니다.");
         }
-        // 결제 모집은 목표 미달로 마감하면 환불 대상에서 빠지므로 진행하지 않으려면 모집 취소 사용
-        if (payments.required(groupBuy.unitPrice())
+        // 참가비 모집은 목표 미달로 마감하면 환불 대상에서 빠지므로 진행하지 않으려면 모집 취소 사용
+        if (payments.required()
                 && groupBuys.sumQuantityOfOthers(id, 0) < groupBuy.targetQuantity()) {
             throw new ApiException(HttpStatus.CONFLICT, "목표 수량을 채워야 마감할 수 있습니다. 진행하지 않으려면 모집을 취소해 주세요.");
         }
@@ -106,8 +109,10 @@ class GroupBuyService {
     private GroupBuyDetail detail(long id, long me) {
         GroupBuySummary summary = groupBuys.findSummary(id, me).orElseThrow(GroupBuyService::notFound);
         DetailExtra extra = groupBuys.findDetailExtra(id).orElseThrow(GroupBuyService::notFound);
+        int paidAmount = payments.paidAmount(id, me);
         return new GroupBuyDetail(summary, extra.description(), extra.hostId() == me, extra.participants(),
-                payments.required(summary.unitPrice()), payments.paid(id, me));
+                payments.required(), payments.required() ? GroupBuyPaymentService.PARTICIPATION_FEE : 0,
+                paidAmount > 0, paidAmount);
     }
 
     private static ApiException notFound() {

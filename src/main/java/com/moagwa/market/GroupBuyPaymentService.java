@@ -16,13 +16,16 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 같이 사기 참여 결제. 주문 생성 → 결제위젯 → 승인 시 참여 확정.
- * 참여 취소·모집 취소·목표 미달 시 전액 환불
+ * 같이 사기 참가비 결제. 주문 생성 → 결제위젯 → 승인 시 참여 확정.
+ * 참가비는 수량과 관계없이 1회 고정이고, 물품 대금은 주최자와 참여자가 직접 정산.
+ * 참여 취소·모집 취소·목표 미달 시 참가비 전액 환불
  */
 @Slf4j
 @Service
 class GroupBuyPaymentService {
 
+    /** 참여 1건당 참가비(원) */
+    static final int PARTICIPATION_FEE = 500;
     private static final int REFUND_BATCH = 50;
     /** 승인 요청 후 이 시간이 지나도 승인 중이면 저장 실패로 보고 정리 */
     private static final int STALE_APPROVING_MINUTES = 10;
@@ -40,28 +43,28 @@ class GroupBuyPaymentService {
         this.tx = new TransactionTemplate(transactions);
     }
 
-    /** 유료 모집이고 결제 기능이 켜져 있으면 결제 후 참여 */
-    boolean required(int unitPrice) {
-        return unitPrice > 0 && toss.enabled();
+    /** 결제 기능이 켜져 있으면 모든 모집은 참가비 결제 후 참여 */
+    boolean required() {
+        return toss.enabled();
     }
 
-    boolean paid(long groupBuyId, long userId) {
-        return payments.findPaidOrderId(groupBuyId, userId).isPresent();
+    /** 내 결제 완료 금액(환불될 금액). 결제 완료 주문이 없으면 0 */
+    int paidAmount(long groupBuyId, long userId) {
+        return payments.findPaidAmount(groupBuyId, userId).orElse(0);
     }
 
     @Transactional
     PaymentOrder createOrder(long groupBuyId, int quantity, long me) {
         LockedGroupBuy g = groupBuys.lock(groupBuyId).orElseThrow(GroupBuyPaymentService::notFound);
-        if (!required(g.unitPrice())) {
+        if (!required()) {
             throw new ApiException(HttpStatus.CONFLICT, "결제가 필요 없는 모집입니다.");
         }
         checkJoinable(g, groupBuyId, quantity, me);
         // 주문번호 규칙: 6~64자, 영문·숫자·-·_·=
         String orderId = "GB" + groupBuyId + "-" + UUID.randomUUID().toString().replace("-", "");
-        int amount = Math.multiplyExact(g.unitPrice(), quantity);
-        payments.insert(orderId, groupBuyId, me, quantity, amount);
-        String name = g.title() + (quantity > 1 ? " " + quantity + "개" : "");
-        return new PaymentOrder(orderId, amount, name.length() > 100 ? name.substring(0, 100) : name);
+        payments.insert(orderId, groupBuyId, me, quantity, PARTICIPATION_FEE);
+        String name = "같이 사기 참가비 · " + g.title();
+        return new PaymentOrder(orderId, PARTICIPATION_FEE, name.length() > 100 ? name.substring(0, 100) : name);
     }
 
     /**

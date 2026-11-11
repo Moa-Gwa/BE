@@ -28,7 +28,7 @@ final class MarketDto {
     }
 
     record GroupBuyRequest(@NotBlank @Size(max = 60) String title, @Size(max = 2000) String description,
-                           @NotNull @Min(0) @Max(100_000_000) Integer unitPrice,
+                           @NotNull @Min(1) @Max(100_000_000) Integer unitPrice,
                            @NotNull @Min(2) @Max(1000) Integer targetQuantity, @NotNull Instant deadlineAt,
                            @Size(max = 100) String pickupPlace, @Size(max = 300) String imageUrl) {
     }
@@ -64,14 +64,15 @@ final class MarketDto {
     }
 
     /**
-     * paymentRequired: 결제 후 참여(유료 모집이고 결제 기능이 켜진 경우)
-     * myPaid: 내 참여가 결제 완료 상태인지. 결제 기능 도입 전 참여자는 false
+     * paymentRequired: 참가비 결제 후 참여(결제 기능이 켜진 경우)
+     * participationFee: 새로 참여할 때 내는 참가비. 물품 대금은 주최자와 직접 정산
+     * myPaid, myPaidAmount: 내 결제 완료 여부와 실제 결제 금액(참여 취소 시 환불될 금액)
      */
     record GroupBuyDetail(GroupBuySummary summary, String description, boolean mine, int participants,
-                          boolean paymentRequired, boolean myPaid) {
+                          boolean paymentRequired, int participationFee, boolean myPaid, int myPaidAmount) {
     }
 
-    /** 결제위젯에 넘길 주문. 금액은 서버가 단가 × 수량으로 계산 */
+    /** 결제위젯에 넘길 주문. 금액은 서버가 정한 참가비 */
     record PaymentOrder(String orderId, int amount, String orderName) {
     }
 

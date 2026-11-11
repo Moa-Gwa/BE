@@ -70,15 +70,17 @@ class GroupBuyPaymentTest {
                 .andExpect(status().isConflict());
 
         JsonNode order = order(id, buyer, 2);
-        assertThat(order.get("amount").asInt()).isEqualTo(6000);
+        assertThat(order.get("amount").asInt()).isEqualTo(500);
         String orderId = order.get("orderId").asText();
 
+        // 참가비는 수량과 관계없이 500원
         mvc.perform(get("/api/market/group-buys/" + id).header("Authorization", token(buyer)))
-                .andExpect(jsonPath("$.myPaid").value(false));
-        confirm(buyer, "pk-" + orderId, orderId, 6000).andExpect(status().isOk())
-                .andExpect(jsonPath("$.summary.myQuantity").value(2)).andExpect(jsonPath("$.myPaid").value(true));
+                .andExpect(jsonPath("$.myPaid").value(false)).andExpect(jsonPath("$.participationFee").value(500));
+        confirm(buyer, "pk-" + orderId, orderId, 500).andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.myQuantity").value(2)).andExpect(jsonPath("$.myPaid").value(true))
+                .andExpect(jsonPath("$.myPaidAmount").value(500));
         // 성공 페이지 새로고침 등 같은 승인 재요청은 결과만 반환
-        confirm(buyer, "pk-" + orderId, orderId, 6000).andExpect(status().isOk());
+        confirm(buyer, "pk-" + orderId, orderId, 500).andExpect(status().isOk());
         verify(toss, times(1)).confirm(anyString(), eq(orderId), anyLong());
 
         perform(post("/api/market/group-buys/" + id + "/payments"), buyer, "{\"quantity\":1}")
@@ -96,16 +98,28 @@ class GroupBuyPaymentTest {
     }
 
     @Test
+    void legacyPaymentShowsItsActualAmount() throws Exception {
+        long id = createGroupBuy(3000, 3);
+        // 참가비 도입 전 단가 × 수량으로 결제한 주문은 실제 금액을 그대로 안내·환불
+        jdbc.update("""
+                INSERT INTO group_buy_payments (order_id, group_buy_id, user_id, quantity, amount, status, payment_key, paid_at)
+                VALUES (?, ?, ?, 2, 6000, 'PAID', ?, now())""", "legacy-" + id, id, buyer.getId(), "pk-legacy-" + id);
+        mvc.perform(get("/api/market/group-buys/" + id).header("Authorization", token(buyer)))
+                .andExpect(jsonPath("$.myPaid").value(true)).andExpect(jsonPath("$.myPaidAmount").value(6000))
+                .andExpect(jsonPath("$.participationFee").value(500));
+    }
+
+    @Test
     void confirmRejectsWrongAmountAndFullGroupWithoutCharging() throws Exception {
         long id = createGroupBuy(1000, 2);
         String mine = order(id, buyer, 2).get("orderId").asText();
         String others = order(id, other, 1).get("orderId").asText();
 
         confirm(buyer, "pk-" + mine, mine, 1).andExpect(status().isBadRequest());
-        confirm(buyer, "pk-" + mine, mine, 2000).andExpect(status().isOk());
+        confirm(buyer, "pk-" + mine, mine, 500).andExpect(status().isOk());
         // 다른 사람이 먼저 남은 수량을 채우면 승인 전에 막혀 결제되지 않음
-        confirm(other, "pk-" + others, others, 1000).andExpect(status().isConflict());
-        confirm(other, "pk-" + mine, mine, 2000).andExpect(status().isForbidden());
+        confirm(other, "pk-" + others, others, 500).andExpect(status().isConflict());
+        confirm(other, "pk-" + mine, mine, 500).andExpect(status().isForbidden());
 
         verify(toss, never()).confirm(anyString(), eq(others), anyLong());
         verify(toss, times(1)).confirm(anyString(), anyString(), anyLong());
@@ -139,7 +153,7 @@ class GroupBuyPaymentTest {
         String rejected = order(id, buyer, 1).get("orderId").asText();
         when(toss.confirm(anyString(), eq(rejected), anyLong()))
                 .thenThrow(com.moagwa.common.exception.ApiException.badRequest("카드 한도가 초과되었습니다."));
-        confirm(buyer, "pk-" + rejected, rejected, 1000).andExpect(status().isBadRequest())
+        confirm(buyer, "pk-" + rejected, rejected, 500).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("카드 한도가 초과되었습니다."));
         assertThat(paymentStatus(rejected)).isEqualTo("FAILED");
         assertThat(participantCount(id)).isZero();
@@ -163,9 +177,9 @@ class GroupBuyPaymentTest {
         // 결제사 승인을 기다리는 사이 주최자가 모집 취소
         when(toss.confirm(anyString(), eq(orderId), anyLong())).thenAnswer(inv -> {
             jdbc.update("UPDATE group_buys SET status = 'CANCELED' WHERE id = ?", id);
-            return new TossPaymentsClient.Payment(inv.getArgument(0), orderId, "DONE", 1000);
+            return new TossPaymentsClient.Payment(inv.getArgument(0), orderId, "DONE", 500);
         });
-        confirm(buyer, "pk-" + orderId, orderId, 1000).andExpect(status().isConflict());
+        confirm(buyer, "pk-" + orderId, orderId, 500).andExpect(status().isConflict());
         verify(toss).cancel("pk-" + orderId, orderId, "결제 처리 중 오류로 자동 취소");
         assertThat(paymentStatus(orderId)).isEqualTo("CANCELED");
         assertThat(participantCount(id)).isZero();
@@ -201,7 +215,7 @@ class GroupBuyPaymentTest {
 
     private long createGroupBuy(int unitPrice, int target) throws Exception {
         Map<String, Object> body = Map.of("title", "같이 사요", "unitPrice", unitPrice, "targetQuantity", target,
-                "deadlineAt", Instant.now().plus(2, ChronoUnit.DAYS).toString());
+                "deadlineAt", Instant.now().plus(2, ChronoUnit.DAYS).toString(), "imageUrl", "/uploads/g.png");
         String res = perform(post("/api/market/group-buys"), host, json.writeValueAsString(body))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.paymentRequired").value(true))
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
