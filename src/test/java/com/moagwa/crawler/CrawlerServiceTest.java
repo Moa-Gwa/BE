@@ -54,6 +54,11 @@ class CrawlerServiceTest {
         source = sources.save(new CrawlSource("test_source", org, LIST_URL));
     }
 
+    /** 다른 테스트가 남긴 공지는 제외하고 이 소스의 공지만 셈 */
+    private List<CrawledNotice> mine() {
+        return notices.findAll().stream().filter(n -> n.getSource().getId().equals(source.getId())).toList();
+    }
+
     @Test
     void firstCrawlBackfillsNoticesWithContentAndPublishesNoEvents() throws IOException {
         stubSite();
@@ -62,7 +67,7 @@ class CrawlerServiceTest {
 
         assertThat(result.status()).isEqualTo(CrawlStatus.SUCCESS);
         assertThat(result.newNotices()).isEqualTo(4);
-        List<CrawledNotice> saved = notices.findAll();
+        List<CrawledNotice> saved = mine();
         assertThat(saved).hasSize(4).allMatch(CrawledNotice::isContentFetched);
         assertThat(saved).anyMatch(n -> n.getContentText().contains("가톨릭대학교 학생 여러분"));
         assertThat(events.stream(CrawledNoticeCreatedEvent.class)).isEmpty();
@@ -81,7 +86,7 @@ class CrawlerServiceTest {
         CrawlResult result = crawler.crawlSource(reloaded);
 
         assertThat(result.newNotices()).isEqualTo(1);
-        assertThat(notices.count()).isEqualTo(4);
+        assertThat(mine()).hasSize(4);
         assertThat(events.stream(CrawledNoticeCreatedEvent.class)).hasSize(1)
                 .first().satisfies(e -> assertThat(e.title()).isNotBlank());
     }
@@ -92,12 +97,12 @@ class CrawlerServiceTest {
         doReturn(load("catholic-list.html", LIST_URL)).when(fetcher).fetch(LIST_URL);
 
         crawler.crawlSource(source);
-        assertThat(notices.findAll()).hasSize(4).noneMatch(CrawledNotice::isContentFetched);
+        assertThat(mine()).hasSize(4).noneMatch(CrawledNotice::isContentFetched);
 
         stubSite();
         crawler.crawlSource(sources.findById(source.getId()).orElseThrow());
 
-        assertThat(notices.findAll()).hasSize(4).allMatch(CrawledNotice::isContentFetched);
+        assertThat(mine()).hasSize(4).allMatch(CrawledNotice::isContentFetched);
     }
 
     @Test
