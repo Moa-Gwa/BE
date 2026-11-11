@@ -11,6 +11,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 공지 본문 → 마감일·행사일·카테고리·키워드 추출의 프롬프트와 응답 검증.
@@ -26,6 +28,7 @@ final class NoticeExtractor {
     /** 게시일보다 이만큼 이전 날짜는 오추출로 봄(지난 일정 언급 등) */
     private static final int MIN_DAYS_BEFORE_PUBLISH = 30;
     private static final int MAX_DAYS_AFTER_PUBLISH = 400;
+    private static final Pattern NUMBER = Pattern.compile("\\d{1,4}");
 
     record Result(Instant deadlineAt, Instant eventStartAt, Instant eventEndAt, String evidence, String category,
                   List<String> keywords) {
@@ -91,7 +94,7 @@ final class NoticeExtractor {
         String deadlineEvidence = str(r, "deadlineEvidence");
         if (trustDates && grounded(deadlineEvidence, haystack)) {
             LocalDate date = date(str(r, "deadlineDate"), published);
-            if (date != null) {
+            if (date != null && mentions(deadlineEvidence, date)) {
                 deadline = date.atTime(timeOr(str(r, "deadlineTime"), defaultDeadlineTime)).atZone(KST).toInstant();
             }
         }
@@ -101,11 +104,21 @@ final class NoticeExtractor {
         String eventEvidence = str(r, "eventEvidence");
         if (trustDates && grounded(eventEvidence, haystack)) {
             LocalDate startDate = date(str(r, "eventStartDate"), published);
-            if (startDate != null) {
+            if (startDate != null && mentions(eventEvidence, startDate)) {
                 eventStart = startDate.atTime(timeOr(str(r, "eventStartTime"), LocalTime.MIN)).atZone(KST).toInstant();
-                // 종료일이 없으면 하루짜리 행사로 보고 그날 끝까지 진행 중으로 표시
-                LocalDate endDate = str(r, "eventEndDate") == null ? startDate : date(str(r, "eventEndDate"), published);
+                // 종료일이 없으면 하루짜리 행사. 종료 시각(18:00~20:00 등)만 있으면 그날 종료 시각 사용
+                LocalDate endDate = startDate;
                 LocalTime endTime = timeOr(str(r, "eventEndTime"), LocalTime.of(23, 59));
+                LocalDate answeredEnd = date(str(r, "eventEndDate"), published);
+                if (answeredEnd != null && !answeredEnd.isBefore(startDate) && endMentioned(eventEvidence, startDate, answeredEnd)) {
+                    endDate = answeredEnd;
+                } else if (str(r, "eventEndDate") != null) {
+                    // 근거 문장에서 확인되지 않은 종료일은 버리고 시작일 하루짜리로 표시
+                    endTime = LocalTime.of(23, 59);
+                    if (answeredEnd != null && answeredEnd.isBefore(startDate)) {
+                        endDate = null;
+                    }
+                }
                 eventEnd = endDate == null ? null : endDate.atTime(endTime).atZone(KST).toInstant();
                 if (eventEnd == null || eventEnd.isBefore(eventStart)) {
                     eventStart = null;
@@ -130,6 +143,35 @@ final class NoticeExtractor {
     private static boolean grounded(String evidence, String haystack) {
         String e = squash(evidence == null ? "" : evidence);
         return e.length() >= 4 && haystack.contains(e);
+    }
+
+    /**
+     * 근거 문장에 해당 날짜의 월·일이 연달아 적혀 있는지. "12. 7.", "26.10.07", "11월 20일", "10/2" 형식 모두 숫자 순서로 확인.
+     * 근거 문장은 맞게 옮기고 날짜만 다르게 답한 경우를 걸러냄
+     */
+    private static boolean mentions(String evidence, LocalDate d) {
+        List<Integer> n = numbers(evidence);
+        for (int i = 0; i + 1 < n.size(); i++) {
+            if (n.get(i) == d.getMonthValue() && n.get(i + 1) == d.getDayOfMonth()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 종료일은 "11월 20일 ~ 22일"처럼 같은 달이면 일만 적는 경우도 허용 */
+    private static boolean endMentioned(String evidence, LocalDate start, LocalDate end) {
+        return mentions(evidence, end)
+                || start.getMonth() == end.getMonth() && numbers(evidence).contains(end.getDayOfMonth());
+    }
+
+    private static List<Integer> numbers(String s) {
+        List<Integer> out = new ArrayList<>();
+        Matcher m = NUMBER.matcher(s);
+        while (m.find()) {
+            out.add(Integer.parseInt(m.group()));
+        }
+        return out;
     }
 
     /** 게시일 기준 허용 범위 밖이거나 형식이 틀리면 null */

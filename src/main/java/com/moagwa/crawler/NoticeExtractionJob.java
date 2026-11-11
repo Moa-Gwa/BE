@@ -6,6 +6,10 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -31,6 +35,13 @@ class NoticeExtractionJob {
     private final GeminiClient gemini;
     private final NoticeExtractor extractor;
     private final int batchSize;
+    /** Gemini 응답 대기가 크롤러 등 다른 예약 작업의 공용 스케줄러 스레드를 막지 않도록 전용 스레드에서 실행 */
+    private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "notice-extraction");
+        t.setDaemon(true);
+        return t;
+    });
+    private final AtomicBoolean running = new AtomicBoolean();
 
     NoticeExtractionJob(NamedParameterJdbcTemplate jdbc, GeminiClient gemini,
                         @Value("${moagwa.gemini.extraction.default-deadline-time:18:00}") LocalTime defaultDeadlineTime,
@@ -44,9 +55,24 @@ class NoticeExtractionJob {
     @Scheduled(fixedDelayString = "${moagwa.gemini.extraction.interval:PT1M}",
             initialDelayString = "${moagwa.gemini.extraction.initial-delay:PT1M}")
     void run() {
-        if (gemini.enabled()) {
-            extractPending(batchSize);
+        // 이전 묶음이 아직 처리 중이면 이번 주기는 건너뜀
+        if (!gemini.enabled() || !running.compareAndSet(false, true)) {
+            return;
         }
+        worker.execute(() -> {
+            try {
+                extractPending(batchSize);
+            } catch (RuntimeException e) {
+                log.warn("Notice extraction batch failed", e);
+            } finally {
+                running.set(false);
+            }
+        });
+    }
+
+    @PreDestroy
+    void shutdown() {
+        worker.shutdownNow();
     }
 
     /** 추출 전 공지를 최대 limit건 처리하고 성공한 수 반환 */

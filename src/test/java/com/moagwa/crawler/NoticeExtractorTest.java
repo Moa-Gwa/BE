@@ -66,6 +66,30 @@ class NoticeExtractorTest {
     }
 
     @Test
+    void dateNotStatedInTheEvidenceIsRejected() {
+        ObjectNode r = answer("HIGH");
+        r.put("deadlineDate", "2026-12-08").put("deadlineEvidence", "~ 12. 7.(월)"); // 근거는 본문 그대로, 날짜만 다름
+        r.put("eventStartDate", "2026-11-21").put("eventEvidence", "설명회: 11월 20일(금) 14:00");
+
+        NoticeExtractor.Result result = parse(r);
+
+        assertThat(result.deadlineAt()).isNull();
+        assertThat(result.eventStartAt()).isNull();
+    }
+
+    @Test
+    void unverifiedEventEndFallsBackToASingleDay() {
+        ObjectNode r = answer("HIGH");
+        r.put("eventStartDate", "2026-11-20").put("eventEndDate", "2026-11-27").put("eventEndTime", "17:00")
+                .put("eventEvidence", "설명회: 11월 20일(금) 14:00");
+
+        NoticeExtractor.Result result = parse(r);
+
+        assertThat(result.eventStartAt()).isEqualTo(kst(2026, 11, 20, 0, 0));
+        assertThat(result.eventEndAt()).isEqualTo(kst(2026, 11, 20, 23, 59));
+    }
+
+    @Test
     void lowConfidenceDropsDatesButKeepsCategoryAndKeywords() {
         ObjectNode r = answer("LOW");
         r.put("deadlineDate", "2026-12-07").put("deadlineEvidence", "12. 7.(월)");
