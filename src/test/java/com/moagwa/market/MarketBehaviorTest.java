@@ -109,8 +109,8 @@ class MarketBehaviorTest {
 
     @Test
     void itemListFiltersSortsAndPages() throws Exception {
-        createItem(seller, "비싼 " + tag, 3000, "BOOK", List.of());
-        long cheap = createItem(seller, "싼 " + tag, 1000, "LIVING", List.of());
+        createItem(seller, "비싼 " + tag, 3000, "BOOK", List.of("/uploads/i.png"));
+        long cheap = createItem(seller, "싼 " + tag, 1000, "LIVING", List.of("/uploads/i.png"));
 
         items("q", tag, "sort", "price").andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].id").value(cheap));
@@ -141,7 +141,7 @@ class MarketBehaviorTest {
 
     @Test
     void onlyOtherUsersIncreaseTheViewCount() throws Exception {
-        long id = createItem(seller, "조회 " + tag, 1000, "BOOK", List.of());
+        long id = createItem(seller, "조회 " + tag, 1000, "BOOK", List.of("/uploads/i.png"));
 
         itemDetail(id, seller).andExpect(jsonPath("$.viewCount").value(0));
         itemDetail(id, buyer).andExpect(jsonPath("$.viewCount").value(1));
@@ -149,7 +149,7 @@ class MarketBehaviorTest {
 
     @Test
     void likesAreIdempotent() throws Exception {
-        long id = createItem(seller, "관심 " + tag, 1000, "BOOK", List.of());
+        long id = createItem(seller, "관심 " + tag, 1000, "BOOK", List.of("/uploads/i.png"));
         String likes = "/api/market/items/" + id + "/likes";
 
         mvc.perform(put(likes).header("Authorization", token(buyer))).andExpect(status().isNoContent());
@@ -166,7 +166,7 @@ class MarketBehaviorTest {
 
     @Test
     void statusChangeRejectsUnknownValuesAndOtherUsers() throws Exception {
-        long id = createItem(seller, "상태 " + tag, 1000, "BOOK", List.of());
+        long id = createItem(seller, "상태 " + tag, 1000, "BOOK", List.of("/uploads/i.png"));
         String path = "/api/market/items/" + id + "/status";
 
         sendJson(post(path), seller, Map.of("status", "LOST")).andExpect(status().isBadRequest());
@@ -179,7 +179,7 @@ class MarketBehaviorTest {
     @Test
     void acceptingARequestReservesTheItemAndRejectsOtherPendingRequests() throws Exception {
         User other = verifiedUser("other-" + tag);
-        long id = createItem(seller, "요청 " + tag, 1000, "BOOK", List.of());
+        long id = createItem(seller, "요청 " + tag, 1000, "BOOK", List.of("/uploads/i.png"));
         long accepted = requestItem(id, buyer, "먼저 요청");
         long rejected = requestItem(id, other, "늦은 요청");
 
@@ -205,7 +205,7 @@ class MarketBehaviorTest {
 
     @Test
     void requestsNeedAnItemOnSale() throws Exception {
-        long id = createItem(seller, "판매완료 " + tag, 1000, "BOOK", List.of());
+        long id = createItem(seller, "판매완료 " + tag, 1000, "BOOK", List.of("/uploads/i.png"));
         sendJson(post("/api/market/items/" + id + "/status"), seller, Map.of("status", "SOLD"))
                 .andExpect(status().isOk());
 
@@ -216,7 +216,7 @@ class MarketBehaviorTest {
 
     @Test
     void acceptNeedsTheItemToStillBeOnSale() throws Exception {
-        long id = createItem(seller, "수락불가 " + tag, 1000, "BOOK", List.of());
+        long id = createItem(seller, "수락불가 " + tag, 1000, "BOOK", List.of("/uploads/i.png"));
         long requestId = requestItem(id, buyer, "요청");
         sendJson(post("/api/market/items/" + id + "/status"), seller, Map.of("status", "SOLD"))
                 .andExpect(status().isOk());
@@ -229,8 +229,8 @@ class MarketBehaviorTest {
 
     @Test
     void myItemsListsOnlyMyOwnItems() throws Exception {
-        long mine = createItem(seller, "내 물품 " + tag, 1000, "BOOK", List.of());
-        createItem(buyer, "남의 물품 " + tag, 1000, "BOOK", List.of());
+        long mine = createItem(seller, "내 물품 " + tag, 1000, "BOOK", List.of("/uploads/i.png"));
+        createItem(buyer, "남의 물품 " + tag, 1000, "BOOK", List.of("/uploads/i.png"));
 
         mvc.perform(get("/api/me/market/items").header("Authorization", token(seller)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(1))
@@ -302,6 +302,16 @@ class MarketBehaviorTest {
         join(0, buyer, 1).andExpect(status().isNotFound());
         mvc.perform(post("/api/market/group-buys/0/close").header("Authorization", token(seller)))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void itemAndGroupBuyNeedAPhoto() throws Exception {
+        sendJson(post("/api/market/items"), seller, itemBody("사진 없음 " + tag, 1000, "BOOK", List.of()))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("사진을 1장 이상 올려 주세요."));
+        Map<String, Object> group = new HashMap<>(groupBuyBody("사진 없는 모집 " + tag, 3));
+        group.remove("imageUrl");
+        sendJson(post("/api/market/group-buys"), seller, group)
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("사진을 올려 주세요."));
     }
 
     @Test
@@ -402,7 +412,7 @@ class MarketBehaviorTest {
 
     private Map<String, Object> groupBuyBody(String title, int target) {
         return Map.of("title", title, "unitPrice", 1000, "targetQuantity", target,
-                "deadlineAt", Instant.now().plus(2, ChronoUnit.DAYS).toString());
+                "deadlineAt", Instant.now().plus(2, ChronoUnit.DAYS).toString(), "imageUrl", "/uploads/g.png");
     }
 
     private long createGroupBuy(User by, String title, int target) throws Exception {

@@ -19,6 +19,7 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
@@ -191,7 +192,7 @@ class ChatIntegrationTest {
         User host = verifiedUser("host");
         User joiner = verifiedUser("joiner");
         Map<String, Object> body = Map.of("title", "생수 같이 사요 " + tag, "unitPrice", 3000, "targetQuantity", 5,
-                "deadlineAt", Instant.now().plus(1, ChronoUnit.DAYS).toString());
+                "deadlineAt", Instant.now().plus(1, ChronoUnit.DAYS).toString(), "imageUrl", "/uploads/g.png");
         long groupBuyId = json.readTree(mvc.perform(post("/api/market/group-buys").header("Authorization", bearer(host))
                         .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8))
@@ -228,11 +229,13 @@ class ChatIntegrationTest {
     }
 
     private long acceptedTradeRoom(User seller, User buyer) throws Exception {
-        Map<String, Object> item = Map.of("title", "전공책 " + tag, "price", 10000, "category", "BOOK");
+        Map<String, Object> item = Map.of("title", "전공책 " + tag, "price", 10000, "category", "BOOK", "imageUrls", List.of("/uploads/i.png"));
         long itemId = json.readTree(mvc.perform(post("/api/market/items").header("Authorization", bearer(seller))
                         .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(item)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8))
                 .get("id").asLong();
+        // 등록 사진을 순서가 뒤섞인 사진으로 교체해 대표 사진이 정렬 순서를 따르는지 확인
+        jdbc.update("DELETE FROM market_item_images WHERE item_id = ?", itemId);
         jdbc.update("INSERT INTO market_item_images (item_id, url, sort_order) VALUES (?, '/uploads/b.jpg', 1), (?, '/uploads/a.jpg', 0)",
                 itemId, itemId);
         long requestId = json.readTree(mvc.perform(post("/api/market/items/" + itemId + "/requests")

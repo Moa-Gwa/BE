@@ -114,6 +114,9 @@ class MarketItemService {
 
     private static void validate(ItemRequest body) {
         requireIn(CATEGORIES, body.category(), "카테고리");
+        if (body.imageUrls() == null || body.imageUrls().isEmpty()) {
+            throw ApiException.badRequest("사진을 1장 이상 올려 주세요.");
+        }
         MarketInput.requireUploadedImages(body.imageUrls());
     }
 
