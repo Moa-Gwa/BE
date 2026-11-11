@@ -57,9 +57,8 @@ class DateCorrectionService {
                   FROM notice_date_corrections r
                   JOIN crawled_notices c ON c.id = r.crawled_notice_id
                  WHERE r.status = :status
-                 ORDER BY CASE WHEN r.status = 'PENDING' THEN r.created_at END,
-                          r.resolved_at DESC
-                 LIMIT :limit""",
+                 ORDER BY %s
+                 LIMIT :limit""".formatted("PENDING".equals(status) ? "r.created_at" : "r.resolved_at DESC"),
                 new MapSqlParameterSource().addValue("status", status).addValue("limit", LIST_LIMIT),
                 (rs, i) -> new DateCorrectionView(rs.getLong("id"), rs.getString("field"),
                         date(rs.getObject("suggested_start", LocalDate.class)),
