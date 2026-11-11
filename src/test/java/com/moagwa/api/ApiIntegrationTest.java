@@ -54,6 +54,7 @@ class ApiIntegrationTest {
     @Autowired CrawlSourceRepository sources;
     @Autowired CrawledNoticeRepository crawled;
     @Autowired AdminNoticeService adminNotices;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     private Organization council;
     private Organization otherCouncil;
@@ -395,5 +396,32 @@ class ApiIntegrationTest {
         assertThat(r.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)).contains("일정공지 " + tag).contains("DEADLINE", "EVENT");
         mvc.perform(get("/api/schedule").param("from", from).param("to", "2099-01-01"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void bookmarkedCrawledNoticeAppearsInTheStudentsSchedule() throws Exception {
+        Organization dept = organizations.save(new Organization("학과-" + tag, OrganizationType.DEPARTMENT));
+        CrawlSource source = sources.save(new CrawlSource("sched-" + tag, dept, "https://example.com/list"));
+        CrawledNotice c = crawled.save(new CrawledNotice(source, "1", "수집일정 " + tag, "https://example.com/1", false,
+                Instant.now(), Instant.now()));
+        jdbc.update("UPDATE crawled_notices SET deadline_at = ? WHERE id = ?",
+                java.sql.Timestamp.from(Instant.now().plus(Duration.ofDays(2))), c.getId());
+        String from = java.time.LocalDate.now().toString();
+        String to = java.time.LocalDate.now().plusDays(10).toString();
+        String path = "$[?(@.title == '수집일정 " + tag + "')]";
+
+        // 저장 전에는 비로그인·로그인 모두 수집 공지가 일정에 없음
+        mvc.perform(get("/api/schedule").param("from", from).param("to", to)).andExpect(jsonPath(path).isEmpty());
+        mvc.perform(get("/api/schedule").param("from", from).param("to", to).header("Authorization", studentToken()))
+                .andExpect(jsonPath(path).isEmpty());
+
+        mvc.perform(put("/api/me/bookmarks/CRAWLED/" + c.getId()).header("Authorization", studentToken()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/schedule").param("from", from).param("to", to).header("Authorization", studentToken()))
+                .andExpect(jsonPath(path + ".type").value("DEADLINE"))
+                .andExpect(jsonPath(path + ".bookmarked").value(true));
+        // 다른 사람(비로그인)에게는 보이지 않음
+        mvc.perform(get("/api/schedule").param("from", from).param("to", to)).andExpect(jsonPath(path).isEmpty());
     }
 }
