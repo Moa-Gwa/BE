@@ -56,7 +56,7 @@ class FeedRepository {
         }
         if (f.q() != null && !f.q().isBlank()) {
             where.add("(f.title ILIKE :q ESCAPE '\\' OR f.summary ILIKE :q ESCAPE '\\' "
-                    + "OR f.organization_name ILIKE :q ESCAPE '\\')");
+                    + "OR f.organization_name ILIKE :q ESCAPE '\\' OR f.keywords ILIKE :q ESCAPE '\\')");
             p.addValue("q", "%" + escapeLike(f.q().trim()) + "%");
         }
         if (f.forUserId() != null) {

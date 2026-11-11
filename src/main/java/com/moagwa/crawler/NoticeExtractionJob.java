@@ -1,0 +1,103 @@
+package com.moagwa.crawler;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.moagwa.ai.GeminiClient;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.util.List;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+/**
+ * 본문을 수집한 크롤링 공지에서 마감일·행사일·카테고리·키워드를 추출해 저장.
+ * 새 공지와 기존 공지 모두 추출 전 상태로 남아 있으면 최신순으로 조금씩 처리한다.
+ * 실패한 공지는 다음 주기에 다시 시도하고, 정해진 횟수를 넘으면 건너뛴다.
+ */
+@Slf4j
+@Component
+class NoticeExtractionJob {
+
+    static final int MAX_ATTEMPTS = 3;
+
+    record Pending(long id, String title, String text, Instant publishedAt) {
+    }
+
+    private final NamedParameterJdbcTemplate jdbc;
+    private final GeminiClient gemini;
+    private final NoticeExtractor extractor;
+    private final int batchSize;
+
+    NoticeExtractionJob(NamedParameterJdbcTemplate jdbc, GeminiClient gemini,
+                        @Value("${moagwa.gemini.extraction.default-deadline-time:18:00}") LocalTime defaultDeadlineTime,
+                        @Value("${moagwa.gemini.extraction.batch-size:10}") int batchSize) {
+        this.jdbc = jdbc;
+        this.gemini = gemini;
+        this.extractor = new NoticeExtractor(defaultDeadlineTime);
+        this.batchSize = batchSize;
+    }
+
+    @Scheduled(fixedDelayString = "${moagwa.gemini.extraction.interval:PT1M}",
+            initialDelayString = "${moagwa.gemini.extraction.initial-delay:PT1M}")
+    void run() {
+        if (gemini.enabled()) {
+            extractPending(batchSize);
+        }
+    }
+
+    /** 추출 전 공지를 최대 limit건 처리하고 성공한 수 반환 */
+    int extractPending(int limit) {
+        List<String> categories = jdbc.queryForList("SELECT code FROM categories ORDER BY sort_order",
+                new MapSqlParameterSource(), String.class);
+        int done = 0;
+        for (Pending n : pending(limit)) {
+            try {
+                JsonNode answer = gemini.generateJson(extractor.prompt(n.title(), n.text(), n.publishedAt(), categories),
+                        NoticeExtractor.schema(categories));
+                save(n.id(), extractor.parse(answer, n.title(), n.text(), n.publishedAt(), categories));
+                done++;
+            } catch (GeminiClient.UnavailableException e) {
+                log.info("Notice extraction paused after {} notices: {}", done, e.getMessage());
+                break; // 남은 공지는 다음 주기에 처리
+            } catch (RuntimeException e) {
+                log.warn("Notice extraction failed: noticeId={}", n.id(), e);
+                jdbc.update("UPDATE crawled_notices SET extraction_attempts = extraction_attempts + 1 WHERE id = :id",
+                        new MapSqlParameterSource("id", n.id()));
+            }
+        }
+        return done;
+    }
+
+    private List<Pending> pending(int limit) {
+        return jdbc.query("""
+                SELECT id, title, content_text, published_at FROM crawled_notices
+                 WHERE extracted_at IS NULL AND content_fetched AND extraction_attempts < :max
+                   AND content_text IS NOT NULL AND btrim(content_text) <> ''
+                 ORDER BY published_at DESC LIMIT :limit""",
+                new MapSqlParameterSource().addValue("max", MAX_ATTEMPTS).addValue("limit", limit),
+                (rs, i) -> new Pending(rs.getLong("id"), rs.getString("title"), rs.getString("content_text"),
+                        rs.getTimestamp("published_at").toInstant()));
+    }
+
+    /** 게시판 분류로 정해진 카테고리는 유지하고 비어 있을 때만 채움 */
+    private void save(long id, NoticeExtractor.Result r) {
+        jdbc.update("""
+                UPDATE crawled_notices
+                   SET deadline_at = :deadline, event_start_at = :eventStart, event_end_at = :eventEnd,
+                       date_evidence = :evidence, keywords = :keywords, category = COALESCE(category, :category),
+                       extracted_at = now()
+                 WHERE id = :id""",
+                new MapSqlParameterSource().addValue("id", id)
+                        .addValue("deadline", ts(r.deadlineAt())).addValue("eventStart", ts(r.eventStartAt()))
+                        .addValue("eventEnd", ts(r.eventEndAt())).addValue("evidence", r.evidence())
+                        .addValue("keywords", r.keywords().toArray(String[]::new)).addValue("category", r.category()));
+    }
+
+    private static Timestamp ts(Instant at) {
+        return at == null ? null : Timestamp.from(at);
+    }
+}
