@@ -1,3 +1,8 @@
+# 로컬 통합 실행: DB + 서버 + 프론트. FE 저장소가 ../FE에 있어야 한다.
+#   docker compose up --build   → 프론트 http://localhost:3000, 서버 http://localhost:8080
+#   docker compose up -d postgres → DB만 실행(서버는 scripts/run-local.sh로 직접 실행)
+# 서버 비밀값은 BE/.env에서 실행 시점에 주입하고 이미지에 넣지 않는다.
+name: moagwa
 services:
   postgres:
     image: postgres:16
@@ -5,9 +10,56 @@ services:
       POSTGRES_DB: moagwa
       POSTGRES_USER: moagwa
       POSTGRES_PASSWORD: moagwa
+    # 로컬에서 서버만 직접 실행할 때(run-local.sh) 쓰는 포트
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moagwa -d moagwa"]
+      interval: 5s
+      retries: 10
+
+  be:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # local 프로필: 개발용 로그인·샘플 데이터. DB 주소만 컨테이너 이름으로 바꾼다.
+      SPRING_PROFILES_ACTIVE: local
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/moagwa
+      # 이미지에 Node 런타임이 없어 인스타그램 수집기는 끈다.
+      INSTAGRAM_CRAWLER_ENABLED: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  fe:
+    build:
+      context: ../FE
+      # NEXT_PUBLIC_* 값은 빌드할 때 번들에 박히므로 실행 환경변수가 아니라 빌드 인자로 넘긴다.
+      # 카카오·FCM·토스까지 쓰려면: docker compose --env-file ../FE/.env.local up --build
+      args:
+        # 브라우저가 호출하는 주소라 컨테이너 이름이 아닌 localhost를 쓴다.
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+        NEXT_PUBLIC_KAKAO_CLIENT_ID: ${NEXT_PUBLIC_KAKAO_CLIENT_ID:-}
+        NEXT_PUBLIC_FIREBASE_API_KEY: ${NEXT_PUBLIC_FIREBASE_API_KEY:-}
+        NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:-}
+        NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${NEXT_PUBLIC_FIREBASE_PROJECT_ID:-}
+        NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:-}
+        NEXT_PUBLIC_FIREBASE_APP_ID: ${NEXT_PUBLIC_FIREBASE_APP_ID:-}
+        NEXT_PUBLIC_FIREBASE_VAPID_KEY: ${NEXT_PUBLIC_FIREBASE_VAPID_KEY:-}
+        NEXT_PUBLIC_TOSS_CLIENT_KEY: ${NEXT_PUBLIC_TOSS_CLIENT_KEY:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - be
+
 volumes:
   pgdata:
+  uploads:
