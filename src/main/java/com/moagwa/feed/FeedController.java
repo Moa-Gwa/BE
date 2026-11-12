@@ -76,14 +76,14 @@ class FeedController {
 
     @PostMapping("/notices/{id}/view")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void viewNotice(@PathVariable long id) {
-        notices.increaseView("MANUAL", id);
+    void viewNotice(@PathVariable long id, Authentication auth) {
+        notices.increaseView("MANUAL", id, CurrentUser.studentIdOrNull(auth));
     }
 
     @PostMapping("/crawled-notices/{id}/view")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void viewCrawled(@PathVariable long id) {
-        notices.increaseView("CRAWLED", id);
+    void viewCrawled(@PathVariable long id, Authentication auth) {
+        notices.increaseView("CRAWLED", id, CurrentUser.studentIdOrNull(auth));
     }
 
     @GetMapping("/categories")
