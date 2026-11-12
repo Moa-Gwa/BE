@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -569,7 +570,7 @@ class ApiIntegrationTest {
     void captionsRejectMismatchedCountsNullItemsAndExcessLength() throws Exception {
         assertBlocksRejected(List.of(text("본문"), Map.of("type", "IMAGES", "images", List.of("/uploads/a.png"), "captions", List.of("하나", "둘"))));
         assertBlocksRejected(List.of(text("본문"), Map.of("type", "IMAGES", "images", List.of("/uploads/a.png"), "captions", List.of("x".repeat(301)))));
-        assertBlocksRejected(List.of(text("본문"), Map.of("type", "IMAGES", "images", List.of("/uploads/a.png"), "captions", java.util.Collections.singletonList(null))));
+        assertBlocksRejected(List.of(text("본문"), Map.of("type", "IMAGES", "images", List.of("/uploads/a.png"), "captions", Collections.singletonList(null))));
         long id = createNotice(admin, Map.of("title", "설명 없음", "blocks", List.of(text("본문"), images("STACK", "/uploads/a.png")))).get("id").asLong();
         mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.blocks[1].captions[0]").value(""));
     }
