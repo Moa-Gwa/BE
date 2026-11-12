@@ -1,8 +1,6 @@
 spring:
   application:
     name: moagwa-be
-  profiles:
-    default: local
   jpa:
     open-in-view: false
     hibernate:
@@ -16,15 +14,51 @@ spring:
       max-request-size: 50MB
 
 moagwa:
+  # 메일 링크(관리자 계정 비밀번호 설정 등)에 넣을 프론트엔드 주소
+  frontend-url: ${FRONTEND_URL:https://localhost:3000}
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://[::1]:3000}
   jwt:
     secret: ${JWT_SECRET}
+  auth:
+    cookie:
+      # 로그인 토큰을 담는 HttpOnly 쿠키. 운영은 HTTPS라 secure=true.
+      secure: ${AUTH_COOKIE_SECURE:true}
+      same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+      # 비우면 API 호스트에만 쿠키가 붙는다. 하위 도메인끼리 공유해야 할 때만 지정(예: moagwa.kr).
+      domain: ${AUTH_COOKIE_DOMAIN:}
   upload:
     dir: ${UPLOAD_DIR:./uploads}
+  firebase:
+    # 서비스 계정 키(JSON) 파일의 절대 경로. 저장소 밖에 두고 환경변수로만 넘긴다. 비어 있으면 푸시 발송을 건너뛴다.
+    credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
+  verification:
+    # 재학생 인증에 쓸 수 있는 학교 메일 도메인.
+    allowed-email-domain: ${VERIFICATION_EMAIL_DOMAIN:catholic.ac.kr}
+    # true이면 인증 코드를 API 응답에도 담는다. 메일 서버가 없는 로컬·시연 환경 전용이며 운영에서는 false로 둔다.
+    expose-code: ${VERIFICATION_EXPOSE_CODE:false}
+  google:
+    # 구글 로그인을 허용할 이메일 도메인(예: school.ac.kr). 비어 있으면 모든 구글 계정을 허용한다.
+    allowed-email-domain: ${GOOGLE_ALLOWED_EMAIL_DOMAIN:}
   kakao:
     client-id: ${KAKAO_CLIENT_ID:}
     client-secret: ${KAKAO_CLIENT_SECRET:}
+  toss:
+    # 토스페이먼츠 결제위젯 시크릿 키(test_gsk_/live_gsk_). 서버 전용, 비어 있으면 결제 기능 비활성화
+    secret-key: ${TOSS_SECRET_KEY:}
+    base-url: https://api.tosspayments.com
+  # 서비스 운영자로 로그인시킬 관리자 아이디(쉼표 구분). 크롤링 공지 날짜 교정 검토 등 운영자 전용 기능 접근
+  operator-login-ids: ${OPERATOR_LOGIN_IDS:}
+  gemini:
+    # Google AI Studio API 키. 서버 전용, 비어 있으면 공지 정보 추출 비활성화
+    api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
+    extraction:
+      # 크롤링 공지 마감일·행사일·카테고리·키워드 추출. 주기마다 batch-size건씩 최신 공지부터 처리
+      interval: PT1M
+      batch-size: 10
+      # 시각 없이 날짜만 적힌 마감은 업무 종료 시각으로 저장
+      default-deadline-time: "18:00"
 
 crawler:
   enabled: ${CRAWLER_ENABLED:true}
@@ -35,3 +69,27 @@ crawler:
   max-retries: 3
   retry-delay: PT2S
   detail-retry-batch: 20
+  instagram:
+    # Runs Node.js + Playwright on this server. No Apify Actor or API token is used.
+    enabled: ${INSTAGRAM_CRAWLER_ENABLED:false}
+    interval: ${INSTAGRAM_CRAWLER_INTERVAL:P1D}
+    initial-delay: ${INSTAGRAM_CRAWLER_INITIAL_DELAY:PT1M}
+    results-limit: ${INSTAGRAM_CRAWLER_RESULTS_LIMIT:3}
+    node-command: ${INSTAGRAM_CRAWLER_NODE:node}
+    profile-links-script: ${INSTAGRAM_PROFILE_LINKS_SCRIPT:instagram-browser-scraper/src/collect-profile-links.js}
+    post-details-script: ${INSTAGRAM_POST_DETAILS_SCRIPT:instagram-browser-scraper/src/collect-post-details.js}
+    command-timeout: ${INSTAGRAM_CRAWLER_COMMAND_TIMEOUT:PT3M}
+
+# 쿠버네티스 프로브용 /actuator/health/liveness, /actuator/health/readiness
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# API 문서(Swagger)는 기본 비활성화, local 프로필에서만 켬
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

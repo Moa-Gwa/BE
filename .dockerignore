@@ -1,0 +1,14 @@
+.git
+.github
+.claude
+.idea
+.vscode
+*.iml
+.DS_Store
+.env
+.local-pg
+target
+uploads
+instagram-browser-scraper
+scripts
+docker-compose.yml

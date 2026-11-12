@@ -4,6 +4,7 @@ import com.moagwa.auth.CurrentUser;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.organization.OrganizationRepository;
 import com.moagwa.notice.CategoryRepository;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "공지 피드", description = "조회는 누구나. /api/feed/for-me, /api/me/bookmarks는 학생 로그인 필요")
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -74,14 +76,14 @@ class FeedController {
 
     @PostMapping("/notices/{id}/view")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void viewNotice(@PathVariable long id) {
-        notices.increaseView("MANUAL", id);
+    void viewNotice(@PathVariable long id, Authentication auth) {
+        notices.increaseView("MANUAL", id, CurrentUser.studentIdOrNull(auth));
     }
 
     @PostMapping("/crawled-notices/{id}/view")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    void viewCrawled(@PathVariable long id) {
-        notices.increaseView("CRAWLED", id);
+    void viewCrawled(@PathVariable long id, Authentication auth) {
+        notices.increaseView("CRAWLED", id, CurrentUser.studentIdOrNull(auth));
     }
 
     @GetMapping("/categories")
@@ -102,11 +104,11 @@ class FeedController {
     }
 
     @GetMapping("/schedule")
-    List<ScheduleEntry> schedule(@RequestParam LocalDate from, @RequestParam LocalDate to) {
+    List<ScheduleEntry> schedule(@RequestParam LocalDate from, @RequestParam LocalDate to, Authentication auth) {
         if (to.isBefore(from) || from.plusDays(62).isBefore(to)) {
             throw ApiException.badRequest("조회 기간은 최대 62일입니다.");
         }
-        return feed.schedule(from, to.plusDays(1));
+        return feed.schedule(from, to.plusDays(1), CurrentUser.studentIdOrNull(auth));
     }
 
     record CategoryView(long id, String code, String name) {

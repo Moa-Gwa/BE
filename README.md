@@ -1,84 +1,353 @@
-# Moa-Gwa BE
-가톨릭대학교 학내 공지와 일정을 통합 제공하는 Spring Boot API 서버
+# 모아과 백엔드
 
+가톨릭대학교 학내 공지와 일정을 통합 제공하는 Spring Boot API 서버.
 
-Spring Boot 3.2 / Java 17 / Maven / PostgreSQL (Flyway).
+## 주요 기능
 
-  ## 주요 기능
+- 학과·학생회별 공지 통합 조회
+- 공지 검색, 상세 조회, 관심 기관 관리
+- Google / Kakao 소셜 로그인
+- 관리자 공지 등록·수정·삭제
+- Firebase 웹 푸시 알림
+- 학교 홈페이지 공지 크롤링
+- Instagram 학생회 공지 및 캐러셀 이미지 수집
 
-  - 공지사항 통합 조회 및 검색
-  - 학과·학생회별 공지 관리
-  - Google / Kakao 로그인
-  - Firebase Cloud Messaging 푸시 알림
-  - 일반 공지 게시판 크롤링
-  - Instagram 학생회 공지 로컬 크롤링
-  - 관리자 공지 등록·수정·삭제
+## 기술 스택
 
-  ## 기술 스택
+- Spring Boot 3.2
+- Java 21
+- Maven
+- PostgreSQL
+- Flyway
+- Firebase Admin SDK
+- Node.js + Playwright
 
-  - Java 21
-  - Spring Boot 3.2
-  - Spring Data JPA
-  - PostgreSQL
-  - Flyway
-  - Firebase Admin SDK
-  - Node.js + Playwright
+## 실행
 
-  ## 로컬 실행
+먼저 로컬 PostgreSQL을 실행.
 
-  ```bash
-  docker compose up -d
-  ./scripts/run-local.sh
+```bash
+docker compose up -d postgres
+# Docker를 사용하지 않는 경우
+scripts/dev-db.sh start
+scripts/run-local.sh
+# 또는 ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+```
 
-  서버 주소: http://localhost:8080
+기본 프로필이 없으므로 로컬 실행 시 `local` 프로필을 반드시 지정. 프로필 없이 실행하면 개발용 로그인, 샘플 데이터, 인증 코드 노출이 꺼짐.
 
-  헬스 체크:
+서버 주소: `http://localhost:8080`
 
-  curl http://localhost:8080/actuator/health
+### Docker로 서버·프론트·DB 한 번에 실행
 
-  ## 환경변수
+FE 저장소를 `../FE`에 `develop` 브랜치로 받아 둬야 함(FE Dockerfile은 Moa-Gwa/FE#52부터 포함). 로컬에서 띄운 서버·프론트(8080, 3000)는 먼저 종료.
 
-   변수                           설명                                                 
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   JWT_SECRET                     JWT 서명 키
-  ─────────────────────────────  ────────────────────────────────
-   DB_URL                         운영 PostgreSQL 주소
-  ─────────────────────────────  ────────────────────────────────
-   DB_USERNAME                    DB 사용자
-  ─────────────────────────────  ────────────────────────────────
-   DB_PASSWORD                    DB 비밀번호
-  ─────────────────────────────  ────────────────────────────────
-   FIREBASE_CREDENTIALS_PATH      Firebase 서비스 계정 JSON 경로
-  ─────────────────────────────  ────────────────────────────────
-   KAKAO_CLIENT_ID                카카오 REST API 키
-  ─────────────────────────────  ────────────────────────────────
-   GOOGLE_ALLOWED_EMAIL_DOMAIN    Google 로그인 허용 도메인
-  ─────────────────────────────  ────────────────────────────────
-   INSTAGRAM_SESSION_ID           인스타 크롤러 계정 세션
-  ─────────────────────────────  ────────────────────────────────
-   INSTAGRAM_CRAWLER_ENABLED      인스타 크롤러 활성화 여부
+```bash
+docker compose up --build
+# 카카오·FCM·토스 키까지 프론트 빌드에 넣는 경우
+docker compose --env-file ../FE/.env.local up --build
+```
 
+- 서버는 `local` 프로필로 실행되고 비밀값은 `.env`에서 실행 시점에 주입함. 이미지에는 넣지 않음
+- 프론트의 `NEXT_PUBLIC_*` 값은 빌드할 때 번들에 들어가므로 빌드 인자로 넘김
+- 헬스체크: `/actuator/health/liveness`, `/actuator/health/readiness`
 
-  ## Instagram 크롤링 순서
-<img width="1611" height="1098" alt="image" src="https://github.com/user-attachments/assets/2065fb7b-ab4e-4ca7-a723-26c55c8c42cf" />
+## API 문서(Swagger)
 
-  1. 프로필에서 최근 게시물 URL 수집
-  2. DB shortcode 중복 검사
-  3. 신규 게시물만 상세 페이지 파싱
-  4. 캐러셀 이미지 다운로드
-  5. uploads/ 저장
-  6. 공지 및 이미지 경로 DB 저장
+`http://localhost:8080/swagger-ui/index.html` (local 프로필에서만 켜짐, 그 외 프로필은 기본 비활성화)
 
+로그인 API를 Swagger에서 호출하면 세션 쿠키가 저장되어 나머지 API를 Try it out으로 바로 실행 가능. 변경 요청(POST·PUT·DELETE)에 필요한 `X-Requested-With` 헤더는 기본값으로 채워짐.
 
-  ## 테스트
+| 권한 | 로그인 방법 | 사용 가능한 그룹 |
+| --- | --- | --- |
+| 누구나 | 필요 없음 | 인증, 공지 피드(조회), 실시간 공지 |
+| 학생 | `POST /api/auth/dev-student` `{"nickname":"테스트"}` | 내 정보, 푸시 토큰, 재학생 인증, 북마크, 맞춤 피드(`/api/feed/for-me`) |
+| 재학생 인증 | 학생 로그인 후 아래 순서 | 중고거래, 같이 사기, 내 거래, 생활 사진 업로드, 채팅 |
+| 관리자 | `POST /api/admin/auth/login` `{"loginId":"student-council","password":"moagwa1234"}` | 관리자 |
 
-  ./mvnw test
+재학생 인증 순서(local):
+1. `POST /api/me/verification/email` `{"email":"아무거나@catholic.ac.kr"}`: 메일 대신 응답의 `devCode`로 코드 확인
+2. `POST /api/me/verification/confirm` `{"code":"<devCode>"}`: 쿠키가 재학생 권한으로 교체됨
 
-  ## 프로젝트 구조
+권한이 부족하면 401(로그인 안 됨) 또는 403(권한 없음) 반환.
 
-  - auth: 로그인 및 회원 인증
-  - notice: 공지 도메인
-  - organization: 학과·학생회
-  - crawler: 사이트 및 Instagram 크롤러
-  - notification: FCM 푸시
-  - admin: 관리자 기능
+### 채팅 실시간(STOMP)
+
+메시지 전송과 실시간 수신은 Swagger에 나오지 않는 STOMP over WebSocket으로 처리. 목록·이전 메시지·읽음 처리는 Swagger의 채팅 그룹 참고.
+
+- 연결: `ws://localhost:8080/ws`. 재학생 인증된 세션 쿠키 필요, 허용 출처(`CORS_ALLOWED_ORIGINS`, 기본 `http://localhost:3000`)에서만 연결 가능
+- 전송: `SEND /app/chat.send` 본문 `{"roomId":1,"content":"안녕하세요"}` (1~1000자, 방 멤버만)
+- 수신: `SUBSCRIBE /user/queue/chat`. 이벤트 `type`별 형식
+  - `message`: `{"type":"message","roomId":1,"message":{"id":..,"senderId":..,"senderName":..,"content":..,"createdAt":..}}`
+  - `read`: `{"type":"read","roomId":1,"read":{"userId":..,"lastReadId":..}}` 상대가 읽은 위치
+  - `room`: `{"type":"room","roomId":1}` 새 방 생성(거래 수락 등). 채팅 목록 다시 조회
+- 오류: `SUBSCRIBE /user/queue/errors`. 전송 실패 시 `{"message":"..."}` 수신
+- `/user/queue/chat`을 구독 중이 아닌 멤버에게는 FCM 푸시 발송
+
+헬스 체크:
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+로컬 실행 시 Firebase 키가 있으면 `scripts/run-local.sh`가 자동으로 읽음.
+
+```bash
+scripts/run-local.sh
+```
+
+테스트는 인메모리 H2를 사용.
+
+```bash
+./mvnw test
+```
+
+## 환경변수와 보안
+
+| 환경변수 | 용도 |
+| --- | --- |
+| `JWT_SECRET` | 자체 JWT 서명 키 |
+| `FIREBASE_CREDENTIALS_PATH` | Firebase 서비스 계정 JSON 경로 |
+| `KAKAO_CLIENT_ID` | 카카오 REST API 키 |
+| `TOSS_SECRET_KEY` | 토스페이먼츠 결제위젯 시크릿 키(`test_gsk_`/`live_gsk_`). 서버 전용, 비어 있으면 결제 기능 비활성화(유료 같이 사기도 결제 없이 참여) |
+| `KAKAO_CLIENT_SECRET` | 카카오 선택적 보안 키 |
+| `GOOGLE_ALLOWED_EMAIL_DOMAIN` | Google 로그인 허용 이메일 도메인 |
+| `CORS_ALLOWED_ORIGINS` | 프론트엔드 허용 주소 |
+| `FRONTEND_URL` | 메일 링크에 넣을 프론트엔드 주소(운영 필수, 로컬 기본 `https://localhost:3000`) |
+| `DB_URL` | 운영 PostgreSQL 주소 |
+| `DB_USERNAME` | 운영 DB 사용자 |
+| `DB_PASSWORD` | 운영 DB 비밀번호 |
+
+## 로그인과 알림
+
+### Google 로그인
+
+프론트엔드가 Firebase로 로그인한 뒤 ID Token을 `POST /api/auth/google`로 전달합니다. 백엔드는 Firebase 서비스 계정으로 토큰을 검증하고 자체 JWT를 발급.
+
+- Firebase Console에서 Google 로그인 활성화
+- 배포 도메인을 Authorized domains에 등록
+- `FIREBASE_CREDENTIALS_PATH`가 없으면 Google 로그인은 사용할 수 없음
+- `GOOGLE_ALLOWED_EMAIL_DOMAIN`을 비우면 모든 이메일 도메인 허용
+
+### Kakao 로그인
+
+프론트엔드가 Kakao OAuth 인가 코드를 `POST /api/auth/kakao`로 전달합니다. 백엔드는 Kakao 사용자 정보를 확인한 뒤 자체 JWT를 발급합니다.
+
+### Firebase 푸시 알림
+
+공지 저장 후 `notification/PushSender`가 웹 푸시를 전송합니다. Firebase 키가 없으면 서버는 정상 실행되지만 푸시만 비활성화됩니다.
+
+푸시 토큰 API:
+
+- `PUT /api/me/push-tokens`
+- `DELETE /api/me/push-tokens`
+
+## 주요 API
+
+| 기능 | API |
+| --- | --- |
+| 관리자 로그인 | `POST /api/admin/auth/login` |
+| Google 로그인 | `POST /api/auth/google` |
+| Kakao 로그인 | `POST /api/auth/kakao` |
+| 공지 피드 | `GET /api/feed` |
+| 공지 상세 | `GET /api/notices/{id}` |
+| 일정 조회 | `GET /api/schedule` |
+| 실시간 공지 스트림 | `GET /api/stream` |
+| 내 프로필 | `GET /api/me/profile` |
+
+## 로컬 로그인
+
+기본 `local` 프로필에서는 테스트용 관리자 계정이 생성.
+
+- `student-council`
+- `ai-council`
+- `cs-council`
+- 비밀번호: `moagwa1234`
+
+학생 개발 로그인은 `POST /api/auth/dev-student`를 사용합니다. 운영 환경에서는 개발 로그인 기능을 사용하지 않음.
+
+## 일반 공지 크롤러
+
+일반 학교 홈페이지 공지는 `crawl_sources` 테이블에 등록된 출처에서 수집합니다. 기본 주기는 10분이며 `CRAWLER_ENABLED=false`로 비활성화할 수 있음
+
+첫 수집은 기존 공지를 조용히 저장하고 알림 이벤트를 발송하지 않음.
+
+## 패키지 구조
+
+`com.moagwa` 아래에 다음 도메인이 있습니다.
+
+- `common`: 공통 설정과 보안
+- `auth`: Google·Kakao 인증
+- `notice`: 공지 도메인
+- `organization`: 학과·학생회
+- `user`: 사용자와 관심 설정
+- `admin`: 관리자 기능
+- `crawler`: 일반·Instagram 크롤러
+- `notification`: FCM 푸시
+
+## Instagram 학생회 공지 크롤러 (로컬 Playwright)
+
+인스타그램 학생회 공지는 백엔드 서버가 직접 수집한다. Apify Actor, Apify 토큰, 호출당 과금 API는 사용하지 않는다.
+
+백엔드를 실행하는 모든 컴퓨터 또는 서버에는 아래 환경이 필요하다.
+
+- Spring Boot용 Java 21
+- Node.js 20 이상
+- Playwright Chromium 브라우저
+- 환경변수로만 주입하는 크롤러 전용 인스타그램 계정의 `sessionid` 쿠키
+- 운영 환경에서 재배포 뒤에도 내려받은 이미지를 보존할 `uploads/` 영속 볼륨 또는 객체 스토리지
+
+### 백엔드 실행 환경마다 한 번만 설정
+
+```bash
+cd instagram-browser-scraper
+npm ci
+npx playwright install chromium
+```
+
+Linux 컨테이너 또는 VM은 브라우저 시스템 의존성도 함께 설치한다.
+
+```bash
+npx playwright install --with-deps chromium
+```
+
+로컬 개발에서는 무시되는 `BE/.env`에만 크롤러 계정 세션을 넣는다. 배포 환경에서는 배포 플랫폼의 Secret 환경변수로 주입한다. 세션 값은 절대 커밋하지 않는다.
+
+```env
+INSTAGRAM_SESSION_ID=replace-with-crawler-account-sessionid
+INSTAGRAM_CRAWLER_ENABLED=false
+```
+
+세션과 브라우저 동작을 확인하기 전까지 크롤러는 비활성으로 둔다. 스케줄 수집을 켜려면 `INSTAGRAM_CRAWLER_ENABLED=true`로 변경한 뒤 백엔드를 재시작한다. 재시작 1분 뒤 첫 실행되며, 기본 주기는 하루다. 주기는 `INSTAGRAM_CRAWLER_INTERVAL`로 변경할 수 있다.
+
+### 수집 순서
+
+1. 로컬 헤드리스 Chromium이 등록된 각 프로필에서 최근 게시물 URL만 수집한다.
+2. 백엔드가 게시물 shortcode를 DB와 대조해 중복 여부를 확인한다.
+3. DB에 없는 신규 게시물만 로컬 Chromium으로 열어 캐러셀 이미지 URL과 게시물 정보를 추출한다.
+4. 백엔드가 이미지를 `uploads/`에 내려받고, 공지와 로컬 이미지 경로를 PostgreSQL에 저장한다.
+
+인스타그램 프로필 또는 게시물이 렌더링되지 않으면 수집에 실패하거나 해당 미저장 게시물을 건너뛴다. 이를 이미 수집한 게시물로 저장하지 않으므로 다음 스케줄에서 다시 시도할 수 있다.
+
+### 시퀀스 다이어그램
+
+```mermaid
+sequenceDiagram
+    participant Scheduler as 스케줄러
+    participant Backend as 백엔드
+    participant Browser as 로컬브라우저
+    participant Instagram as 인스타그램
+    participant Database as PostgreSQL
+    participant ImageCdn as 인스타CDN
+    participant Uploads as 업로드저장소
+
+    Scheduler->>Backend: 스케줄 수집 실행
+    Backend->>Browser: 프로필의 최근 게시물 링크 수집
+    Browser->>Instagram: 로그인 세션으로 프로필 열기
+    Instagram-->>Browser: 최근 게시물 URL과 shortcode
+    Browser-->>Backend: 최근 게시물 링크 목록
+    Backend->>Database: source와 shortcode로 중복 조회
+    Database-->>Backend: 기존 게시물과 신규 게시물 결과
+
+    alt 신규 게시물
+        Backend->>Browser: 신규 게시물 URL만 상세 수집
+        Browser->>Instagram: 게시물과 캐러셀 열기
+        Instagram-->>Browser: 이미지 URL, 본문, 게시 시각
+        Browser-->>Backend: 캐러셀 이미지와 메타데이터
+        Backend->>ImageCdn: 신규 이미지 내려받기
+        ImageCdn-->>Backend: 이미지 바이트
+        Backend->>Uploads: uploads에 이미지 저장
+        Backend->>Database: 공지와 로컬 이미지 경로 저장
+    else 기존 게시물
+        Backend-->>Scheduler: 상세 페이지 요청 없이 건너뜀
+    end
+```
+
+## 브랜치와 커밋
+
+브랜치 전략과 커밋·PR 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고합니다.
+
+### 로컬 HTTPS 프론트 연결
+
+`./scripts/run-local.sh`는 `local` 프로필을 사용하며 HTTP/HTTPS의 `localhost:3000` 출처를 허용한다.
+`.env`에 `CORS_ALLOWED_ORIGINS`를 지정했다면 기본값을 덮어쓰므로 다음처럼 HTTPS도 포함한다.
+
+```dotenv
+CORS_ALLOWED_ORIGINS=http://localhost:3000,https://localhost:3000
+```
+
+변경 후 백엔드를 재시작한다. 프론트의 HTTPS 개발 서버에서는 `NEXT_PUBLIC_API_BASE_URL=`로 설정해
+같은 출처의 `/api` 프록시를 사용한다. 출처 제한과 CSRF 검사는 계속 적용된다.
+
+## 학교 공지 썸네일·첨부파일 수집 (BE #68)
+
+학교 공지 상세 파싱 시 본문 첫 유효 이미지를 `crawled_notices.thumbnail_url`에 저장한다.
+이미지는 본문 HTML에서 그대로 표시하며, 인스타그램 전용 `crawled_notice_images` 갤러리에
+추가하지 않는다. 썸네일 후보는 `data-src`(없으면 `src`)를 공지 원문 URL 기준으로 절대화하고
+다음 이미지는 제외한다.
+
+- HTTP(S)가 아닌 주소, 비어 있는 주소, 현재 컬럼 제한(500자)을 넘는 주소
+- 숨김 요소(`hidden`, `aria-hidden`, `display:none`, `visibility:hidden`) 안의 이미지
+- width/height/data-width/data-height 또는 인라인 px 크기가 32 이하인 이미지
+- 파일 경로에 icon/ico/logo/blank/spacer/transparent/pixel 토큰이 포함된 이미지
+
+크기를 알 수 없는 본문 이미지는 허용한다. 적절한 이미지가 없으면 썸네일은 null이다.
+
+첨부파일은 원문 전체 문서의 `.b-file-box a[href]`에서 파일명과 URL을 읽는다.
+학교·국어국문학과의 실제 CMS 구조에서 이 선택자를 확인했다. 다운로드 URL은
+`?mode=download&articleNo=...&attachNo=...`처럼 확장자가 없어도 수집한다.
+첨부파일은 URL 기준 중복을 제거해 `crawled_notice_attachments`에 순서대로 교체 저장한다.
+사이트별 구조가 다르면 DB의 선택자만 변경한다.
+
+```sql
+UPDATE crawl_sources
+SET attachment_selector = '.downloads a[href]'
+WHERE code = '해당_소스_코드';
+```
+
+상세 API `GET /api/crawled-notices/{id}` 응답에 다음 필드를 추가했다.
+
+```json
+{"attachments":[{"fileName":"신청서.hwpx","url":"https://school.example/notice.do?mode=download&attachNo=1"}]}
+```
+
+첨부가 없거나 직접 등록 공지라면 `attachments: []`를 반환한다.
+피드의 기존 `thumbnail` 필드가 학교 썸네일도 반환하므로 FE는 출처를 구분할 필요가 없다.
+
+### 기존 공지 보완 수집과 재수집
+
+V21 마이그레이션 후 기존 공지는 `media_fetched=false`로 시작한다.
+`crawler.enabled=true`이면 기존 크롤러가 한 회차에 소스당 5건씩 상세 페이지를 다시 가져와
+썸네일·첨부파일을 보완한다. 기본 크롤링 주기는 10분이다. 학교 서버에 요청이 몰리지 않도록
+보완 수집 건수는 새 공지 수집과 별개로 작게 둔다.
+미디어가 없는 정상 공지도 완료 처리하므로 반복해서 요청하지 않는다.
+실패하면 기존 미디어를 보존하고 실패 시각(`media_attempted_at`)을 기록해 하루 뒤에 다시 시도한다.
+실패한 공지가 다음 배치를 막지 않도록 아직 시도하지 않은 공지를 먼저 처리한다. 비활성 인스타그램 소스는 이 경로에 포함되지 않는다.
+보완 수집은 새 공지 알림을 발행하지 않는다.
+
+완료된 학교 공지도 다시 수집해야 한다면 해당 소스만 초기화한 뒤 다음 주기를 기다린다.
+원문 페이지 전체를 다시 요청하므로 저장된 본문 HTML에 첨부 영역이 없어도 수집할 수 있다.
+
+```sql
+UPDATE crawled_notices n
+SET media_fetched = false, media_attempted_at = null
+FROM crawl_sources s
+WHERE n.source_id = s.id AND s.enabled = true AND s.code = 'catholic_notice';
+
+SELECT s.code, count(*) FILTER (WHERE NOT n.media_fetched) AS pending,
+       count(*) FILTER (WHERE n.thumbnail_url IS NOT NULL) AS with_thumbnail
+FROM crawled_notices n JOIN crawl_sources s ON s.id = n.source_id
+WHERE s.enabled = true GROUP BY s.code ORDER BY s.code;
+```
+
+검증: `./mvnw -Dtest=BoardParserTest,CrawlerServiceTest,ApiIntegrationTest test`
+
+## 이미지 블록의 사진 설명
+
+IMAGES 블록에 선택 `captions: string[]` 필드를 추가했다. 기존 `images: string[]`와 같은 순서이며
+입력 시 개수가 일치해야 한다. 설명은 사진당 최대 300자이고 빈 문자열은 허용한다.
+필드가 생략된 예전 요청은 빈 설명으로 채우고, 기존 저장 JSON의 captions 누락도 허용한다.
+생성·수정·복제와 학생 상세 응답에 설명이 유지된다. TEXT 블록은 계속 일반 텍스트다.
+기존 JSON 컬럼을 사용하므로 추가 DB 마이그레이션은 없다.
+
+검증: `./mvnw -Dtest=ApiIntegrationTest test` (캡션 저장/수정/복제, 이전 JSON, 길이·개수 검증).

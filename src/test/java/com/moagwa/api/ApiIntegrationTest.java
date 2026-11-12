@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moagwa.admin.Admin;
 import com.moagwa.admin.AdminNoticeService;
 import com.moagwa.admin.AdminRepository;
+import com.moagwa.auth.AuthCookies;
 import com.moagwa.auth.JwtService;
 import com.moagwa.crawler.domain.CrawlSource;
 import com.moagwa.crawler.domain.CrawlSourceRepository;
@@ -25,6 +27,7 @@ import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -52,6 +55,7 @@ class ApiIntegrationTest {
     @Autowired CrawlSourceRepository sources;
     @Autowired CrawledNoticeRepository crawled;
     @Autowired AdminNoticeService adminNotices;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     private Organization council;
     private Organization otherCouncil;
@@ -89,10 +93,11 @@ class ApiIntegrationTest {
     }
 
     @Test
-    void adminLoginReturnsTokenAndRejectsWrongPassword() throws Exception {
+    void adminLoginSetsSessionCookieAndRejectsWrongPassword() throws Exception {
         mvc.perform(post("/api/admin/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"loginId\":\"a-" + tag + "\",\"password\":\"pw-1234\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.token").isNotEmpty())
+                .andExpect(status().isOk()).andExpect(jsonPath("$.token").doesNotExist())
+                .andExpect(cookie().httpOnly(AuthCookies.NAME, true))
                 .andExpect(jsonPath("$.organization.name").value("학생회-" + tag));
         mvc.perform(post("/api/admin/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"loginId\":\"a-" + tag + "\",\"password\":\"nope\"}"))
@@ -232,6 +237,36 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void studentReadsNotificationsAndKeepsNotificationSettings() throws Exception {
+        mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("organizationIds", List.of(council.getId())))))
+                .andExpect(status().isOk());
+        createNotice(admin, Map.of("title", "알림1 " + tag));
+        createNotice(admin, Map.of("title", "알림2 " + tag));
+        JsonNode list = json.readTree(mvc.perform(get("/api/me/notifications").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.unreadCount").value(2)).andReturn().getResponse().getContentAsString());
+
+        mvc.perform(put("/api/me/notifications/" + list.get("items").get(0).get("id").asLong() + "/read")
+                .header("Authorization", studentToken())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/me/notifications").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.unreadCount").value(1)).andExpect(jsonPath("$.items[0].read").value(true));
+        mvc.perform(put("/api/me/notifications/read-all").header("Authorization", studentToken()))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/me/notifications").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.unreadCount").value(0));
+
+        mvc.perform(get("/api/me/notification-settings").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.newNotice").value(true)).andExpect(jsonPath("$.urgent").value(true));
+        Map<String, Boolean> off = Map.of("newNotice", false, "eventStart", true, "deadlineSoon", false, "urgent", true);
+        mvc.perform(put("/api/me/notification-settings").header("Authorization", studentToken())
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(off))).andExpect(status().isOk());
+        mvc.perform(get("/api/me/notification-settings").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.newNotice").value(false)).andExpect(jsonPath("$.deadlineSoon").value(false))
+                .andExpect(jsonPath("$.eventStart").value(true));
+    }
+
+    @Test
     void profileRejectsOrganizationsOfTheWrongType() throws Exception {
         mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -254,7 +289,7 @@ class ApiIntegrationTest {
         mvc.perform(get("/api/crawled-notices/" + c.getId()))
                 .andExpect(jsonPath("$.contentHtml").value("<p>본문</p>"))
                 .andExpect(jsonPath("$.externalLink").value("https://example.com/1"));
-        mvc.perform(post("/api/crawled-notices/" + c.getId() + "/view")).andExpect(status().isNoContent());
+        mvc.perform(post("/api/crawled-notices/" + c.getId() + "/view").header("Authorization", studentToken())).andExpect(status().isNoContent());
         mvc.perform(get("/api/crawled-notices/" + c.getId())).andExpect(jsonPath("$.viewCount").value(1));
     }
 
@@ -393,4 +428,181 @@ class ApiIntegrationTest {
         mvc.perform(get("/api/schedule").param("from", from).param("to", "2099-01-01"))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void bookmarkedCrawledNoticeAppearsInTheStudentsSchedule() throws Exception {
+        Organization dept = organizations.save(new Organization("학과-" + tag, OrganizationType.DEPARTMENT));
+        CrawlSource source = sources.save(new CrawlSource("sched-" + tag, dept, "https://example.com/list"));
+        CrawledNotice c = crawled.save(new CrawledNotice(source, "1", "수집일정 " + tag, "https://example.com/1", false,
+                Instant.now(), Instant.now()));
+        jdbc.update("UPDATE crawled_notices SET deadline_at = ? WHERE id = ?",
+                java.sql.Timestamp.from(Instant.now().plus(Duration.ofDays(2))), c.getId());
+        String from = java.time.LocalDate.now().toString();
+        String to = java.time.LocalDate.now().plusDays(10).toString();
+        String path = "$[?(@.title == '수집일정 " + tag + "')]";
+
+        // 저장 전에는 비로그인·로그인 모두 수집 공지가 일정에 없음
+        mvc.perform(get("/api/schedule").param("from", from).param("to", to)).andExpect(jsonPath(path).isEmpty());
+        mvc.perform(get("/api/schedule").param("from", from).param("to", to).header("Authorization", studentToken()))
+                .andExpect(jsonPath(path).isEmpty());
+
+        mvc.perform(put("/api/me/bookmarks/CRAWLED/" + c.getId()).header("Authorization", studentToken()))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(get("/api/schedule").param("from", from).param("to", to).header("Authorization", studentToken()))
+                .andExpect(jsonPath(path + ".type").value("DEADLINE"))
+                .andExpect(jsonPath(path + ".bookmarked").value(true));
+        // 다른 사람(비로그인)에게는 보이지 않음
+        mvc.perform(get("/api/schedule").param("from", from).param("to", to)).andExpect(jsonPath(path).isEmpty());
+    }
+    @Test
+    void noticeViewsCountEachStudentOncePer24HoursAndRejectAnonymousOrAdmin() throws Exception {
+        long id = createNotice(admin, Map.of("title", "조회수 " + tag)).get("id").asLong();
+        String endpoint = "/api/notices/" + id + "/view";
+        mvc.perform(post(endpoint)).andExpect(status().isUnauthorized());
+        mvc.perform(post(endpoint).header("Authorization", adminToken(admin))).andExpect(status().isForbidden());
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+        }
+        mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.viewCount").value(1));
+        jdbc.update("UPDATE notice_view_records SET viewed_at = now() - interval '23 hours 59 minutes' WHERE notice_id = ? AND source = 'MANUAL'", id);
+        var before = jdbc.queryForObject("SELECT viewed_at FROM notice_view_records WHERE notice_id = ? AND source = 'MANUAL' AND user_id = ?", java.sql.Timestamp.class, id, student.getId());
+        mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.viewCount").value(1));
+        assertThat(jdbc.queryForObject("SELECT viewed_at FROM notice_view_records WHERE notice_id = ? AND source = 'MANUAL' AND user_id = ?", java.sql.Timestamp.class, id, student.getId())).isEqualTo(before);
+        jdbc.update("UPDATE notice_view_records SET viewed_at = now() - interval '24 hours' WHERE notice_id = ? AND source = 'MANUAL'", id);
+        mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+        mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.viewCount").value(2));
+        assertThat(jdbc.queryForObject("SELECT viewed_at FROM notice_view_records WHERE notice_id = ? AND source = 'MANUAL' AND user_id = ?", java.sql.Timestamp.class, id, student.getId())).isAfter(before);
+        User second = users.save(new User("DEV", "viewer-" + tag, "다른학생"));
+        mvc.perform(post(endpoint).header("Authorization", "Bearer " + jwt.issueStudent(second.getId())))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.viewCount").value(3));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notice_view_records WHERE source = 'MANUAL' AND notice_id = ?", Integer.class, id)).isEqualTo(2);
+    }
+
+    @Test
+    void concurrentCrawledViewsCountOnce() throws Exception {
+        CrawlSource source = sources.save(new CrawlSource("views-" + tag, council, "https://example.com/list"));
+        CrawledNotice notice = crawled.save(new CrawledNotice(source, "views", "조회 테스트", "https://example.com/views", false,
+                Instant.now(), Instant.now()));
+        String endpoint = "/api/crawled-notices/" + notice.getId() + "/view";
+        for (int round = 1; round <= 2; round++) {
+            if (round == 2) {
+                jdbc.update("UPDATE notice_view_records SET viewed_at = now() - interval '24 hours' WHERE source = 'CRAWLED' AND notice_id = ?", notice.getId());
+            }
+            var executor = java.util.concurrent.Executors.newFixedThreadPool(8);
+            var start = new java.util.concurrent.CountDownLatch(1);
+            try {
+                var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+                for (int i = 0; i < 8; i++) {
+                    futures.add(executor.submit(() -> {
+                        start.await();
+                        mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+                        return null;
+                    }));
+                }
+                start.countDown();
+                for (var future : futures) future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            } finally {
+                executor.shutdownNow();
+            }
+            assertThat(jdbc.queryForObject("SELECT view_count FROM crawled_notices WHERE id = ?", Integer.class, notice.getId())).isEqualTo(round);
+            mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+            assertThat(jdbc.queryForObject("SELECT view_count FROM crawled_notices WHERE id = ?", Integer.class, notice.getId())).isEqualTo(round);
+        }
+    }
+
+    @Test
+    void unviewableNoticesCannotCreateViewRecords() throws Exception {
+        long draft = createNotice(admin, Map.of("title", "비공개 " + tag, "publishMode", "DRAFT")).get("id").asLong();
+        mvc.perform(post("/api/notices/" + draft + "/view").header("Authorization", studentToken()))
+                .andExpect(status().isNotFound());
+        long deleted = createNotice(admin, Map.of("title", "삭제됨 " + tag)).get("id").asLong();
+        jdbc.update("UPDATE notices SET deleted_at = now() WHERE id = ?", deleted);
+        mvc.perform(post("/api/notices/" + deleted + "/view").header("Authorization", studentToken()))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/crawled-notices/9223372036854775807/view").header("Authorization", studentToken()))
+                .andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notice_view_records WHERE user_id = ?", Integer.class, student.getId())).isZero();
+    }
+
+    @Test
+    void schoolMediaIsReturnedInFeedAndDetailAndCanBeAbsent() throws Exception {
+        CrawlSource source = sources.save(new CrawlSource("media-" + tag, council, "https://school.example/notice.do"));
+        CrawledNotice notice = new CrawledNotice(source, "media", "첨부 공지 " + tag, "https://school.example/notice.do?mode=view&articleNo=1", false, Instant.now(), Instant.now());
+        notice.applyContent("<p>본문</p>", "본문");
+        notice.assignBoardMedia("https://school.example/poster.jpg", List.of(
+                new com.moagwa.crawler.domain.CrawledAttachment("신청서.hwpx", "https://school.example/notice.do?mode=download&attachNo=1")));
+        long id = crawled.saveAndFlush(notice).getId();
+        mvc.perform(get("/api/feed").param("q", tag))
+                .andExpect(jsonPath("$.items[0].thumbnail").value("https://school.example/poster.jpg"));
+        mvc.perform(get("/api/crawled-notices/" + id))
+                .andExpect(jsonPath("$.attachments[0].fileName").value("신청서.hwpx"))
+                .andExpect(jsonPath("$.attachments[0].url").value("https://school.example/notice.do?mode=download&attachNo=1"));
+        // Text-only school notices do not gain placeholder thumbnails or files.
+        CrawledNotice plain = new CrawledNotice(source, "plain", "텍스트 공지 " + tag, "https://school.example/plain", false, Instant.now(), Instant.now());
+        plain.applyContent("<p>본문</p>", "본문");
+        plain.assignBoardMedia(null, List.of());
+        long plainId = crawled.saveAndFlush(plain).getId();
+        mvc.perform(get("/api/crawled-notices/" + plainId)).andExpect(jsonPath("$.attachments").isEmpty());
+        mvc.perform(get("/api/feed").param("q", "텍스트 공지 " + tag)).andExpect(jsonPath("$.items[0].thumbnail").isEmpty());
+    }
+
+    @Test
+    void imageCaptionsSurviveCreateEditAndDuplicate() throws Exception {
+        Map<String, Object> group = captioned("CAROUSEL",
+                List.of("/uploads/a.png", "/uploads/b.png"), List.of("첫 사진 설명", "두 번째 사진 설명"));
+        long id = createNotice(admin, Map.of("title", "캡션 " + tag, "blocks", List.of(text("본문"), group)))
+                .get("id").asLong();
+
+        mvc.perform(get("/api/notices/" + id))
+                .andExpect(jsonPath("$.blocks[1].captions[0]").value("첫 사진 설명"));
+
+        // 사진 순서를 바꾸면 설명도 같은 순서로 저장됨
+        Map<String, Object> reordered = captioned("STACK",
+                List.of("/uploads/b.png", "/uploads/a.png"), List.of("두 번째 사진 설명", "첫 사진 설명"));
+        Map<String, Object> edit = Map.of("title", "캡션 수정", "categoryIds", List.of(1),
+                "blocks", List.of(text("본문"), reordered));
+        mvc.perform(put("/api/admin/notices/" + id)
+                        .header("Authorization", adminToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(edit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocks[1].captions[0]").value("두 번째 사진 설명"));
+
+        mvc.perform(post("/api/admin/notices/" + id + "/duplicate")
+                        .header("Authorization", adminToken(admin)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.blocks[1].captions[1]").value("첫 사진 설명"));
+
+        // 캡션 필드가 생기기 전에 저장된 JSON도 그대로 조회됨
+        jdbc.update("UPDATE notices SET content_blocks = ? WHERE id = ?", """
+                [{"type":"TEXT","text":"예전 글"},
+                 {"type":"IMAGES","images":["/uploads/a.png"],"layout":"STACK"}]""", id);
+        mvc.perform(get("/api/notices/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocks[1].images[0]").value("/uploads/a.png"));
+    }
+
+    @Test
+    void captionsRejectMismatchedCountsNullItemsAndExcessLength() throws Exception {
+        List<String> oneImage = List.of("/uploads/a.png");
+        assertBlocksRejected(List.of(text("본문"), captioned("STACK", oneImage, List.of("하나", "둘"))));
+        assertBlocksRejected(List.of(text("본문"), captioned("STACK", oneImage, List.of("x".repeat(301)))));
+        assertBlocksRejected(List.of(text("본문"), captioned("STACK", oneImage, Collections.singletonList(null))));
+
+        // 설명 없이 보내면 사진마다 빈 설명으로 채워짐
+        long id = createNotice(admin, Map.of("title", "설명 없음",
+                "blocks", List.of(text("본문"), images("STACK", "/uploads/a.png"))))
+                .get("id").asLong();
+        mvc.perform(get("/api/notices/" + id))
+                .andExpect(jsonPath("$.blocks[1].captions[0]").value(""));
+    }
+
+    private static Map<String, Object> captioned(String layout, List<String> urls, List<String> captions) {
+        return Map.of("type", "IMAGES", "layout", layout, "images", urls, "captions", captions);
+    }
+
 }

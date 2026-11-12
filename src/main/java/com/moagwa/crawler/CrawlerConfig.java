@@ -6,7 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(CrawlerProperties.class)
+@EnableConfigurationProperties({CrawlerProperties.class, InstagramCrawlerProperties.class})
 public class CrawlerConfig {
 
     @Bean

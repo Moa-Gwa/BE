@@ -50,6 +50,9 @@ public class CrawlSource {
     @Column(name = "body_selector", nullable = false)
     private String bodySelector = ".b-con-box";
 
+    @Column(name = "attachment_selector", nullable = false, length = 500)
+    private String attachmentSelector = ".b-file-box a[href]";
+
     @Column(nullable = false)
     private boolean enabled = true;
 
@@ -75,6 +78,11 @@ public class CrawlSource {
     /** True until the first successful crawl; used to suppress notifications for the initial backfill. */
     public boolean isFirstCrawl() {
         return lastCrawledAt == null;
+    }
+
+    /** Imported sources are stored for provenance but must not be sent to the HTML board crawler. */
+    public void disable() {
+        this.enabled = false;
     }
 
     public void markSuccess(Instant now, boolean empty) {

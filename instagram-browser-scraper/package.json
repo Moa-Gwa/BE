@@ -1,0 +1,17 @@
+{
+  "name": "moagwa-instagram-browser-scraper",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Locally collect Instagram profile links and carousel images with Playwright.",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/collect-post-details.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "playwright": "1.52.0"
+  }
+}

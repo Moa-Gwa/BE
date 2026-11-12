@@ -57,6 +57,13 @@ git switch develop && git pull && git switch -c release/v0.1.0
 ./mvnw test
 ```
 
+## CI
+
+PR과 `develop` 푸시마다 GitHub Actions가 다음을 검사한다.
+
+- `테스트`: `./mvnw test`
+- `PR 제목 검사`: PR에서만 실행. Squash merge 시 PR 제목이 커밋 메시지가 되므로 위 커밋 컨벤션을 따라야 한다.
+
 ## 브랜치 보호 설정 (저장소 관리자)
 
 `main`, `develop` 모두 Settings → Branches에서 다음을 켠다.

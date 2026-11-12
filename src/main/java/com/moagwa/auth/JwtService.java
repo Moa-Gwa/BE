@@ -21,7 +21,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class JwtService {
 
-    private static final Duration TTL = Duration.ofHours(12);
+    /** 액세스 토큰과 세션 쿠키의 유효 기간. */
+    public static final Duration TTL = Duration.ofHours(12);
 
     private final SecretKey key;
     private final JwtEncoder encoder;
@@ -41,14 +42,28 @@ public class JwtService {
     }
 
     public String issueStudent(long userId) {
-        return issue(userId, "STUDENT", null);
+        return issueStudent(userId, false);
+    }
+
+    /** verified = 학교 메일로 재학생 인증을 마친 학생. 생활거래 API가 이 값을 확인한다. */
+    public String issueStudent(long userId, boolean verified) {
+        return issue(userId, "STUDENT", null, verified);
     }
 
     public String issueAdmin(long adminId, long organizationId) {
-        return issue(adminId, "ADMIN", organizationId);
+        return issueAdmin(adminId, organizationId, false);
     }
 
-    private String issue(long id, String role, Long organizationId) {
+    /** operator = 서비스 운영자. 운영자 전용 API가 이 값을 확인한다. */
+    public String issueAdmin(long adminId, long organizationId, boolean operator) {
+        return issue(adminId, "ADMIN", organizationId, false, operator);
+    }
+
+    private String issue(long id, String role, Long organizationId, boolean verified) {
+        return issue(id, role, organizationId, verified, false);
+    }
+
+    private String issue(long id, String role, Long organizationId, boolean verified, boolean operator) {
         Instant now = Instant.now();
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .subject(String.valueOf(id))
@@ -57,6 +72,12 @@ public class JwtService {
                 .claim("role", role);
         if (organizationId != null) {
             claims.claim("org", organizationId);
+        }
+        if (verified) {
+            claims.claim("verified", true);
+        }
+        if (operator) {
+            claims.claim("operator", true);
         }
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims.build()))
                 .getTokenValue();

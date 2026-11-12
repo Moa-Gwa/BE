@@ -37,6 +37,10 @@ public class Admin {
     @JoinColumn(name = "organization_id")
     private Organization organization;
 
+    /** false면 로그인 불가. 신청으로 발급된 계정은 비밀번호 설정 후 true가 됨 */
+    @Column(nullable = false)
+    private boolean activated = true;
+
     @Column(nullable = false)
     private String role = "ORG_ADMIN";
 
@@ -45,5 +49,28 @@ public class Admin {
         this.passwordHash = passwordHash;
         this.name = name;
         this.organization = organization;
+    }
+
+    /** 승인됐지만 담당자가 아직 비밀번호를 설정하지 않은 계정. 설정 전에는 로그인할 수 없음 */
+    public static Admin awaitingSetup(String loginId, String unusablePasswordHash, String name,
+                                      Organization organization) {
+        Admin admin = new Admin(loginId, unusablePasswordHash, name, organization);
+        admin.activated = false;
+        return admin;
+    }
+
+    /** 담당자가 정한 비밀번호로 계정을 활성화함 */
+    public void activate(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.activated = true;
+    }
+
+    /** 서비스 운영자. 단체 소속과 별개로 크롤링 공지 날짜 교정 등 서비스 전체 관리 권한 보유 */
+    public boolean isOperator() {
+        return "OPERATOR".equals(role);
+    }
+
+    void grantOperator() {
+        this.role = "OPERATOR";
     }
 }

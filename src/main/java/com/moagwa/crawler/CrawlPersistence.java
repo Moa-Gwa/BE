@@ -35,18 +35,37 @@ class CrawlPersistence {
         return notices.findUnfetched(sourceId, PageRequest.of(0, limit));
     }
 
+    @Transactional(readOnly = true)
+    public List<CrawledNotice> findMissingMedia(Long sourceId, Instant retryBefore, int limit) {
+        return notices.findMissingMedia(sourceId, retryBefore, PageRequest.of(0, limit));
+    }
+
     /** Throws DataIntegrityViolationException if (source, externalId) already exists. */
     @Transactional
     public CrawledNotice saveNew(CrawledNotice notice, DetailContent content) {
         if (content != null) {
             notice.applyContent(content.html(), content.text());
+            notice.assignBoardMedia(content.thumbnailUrl(), content.attachments());
         }
         return notices.saveAndFlush(notice);
     }
 
     @Transactional
+    public int fillMissingCategory(Long sourceId, List<String> externalIds, String category) {
+        return externalIds.isEmpty() ? 0 : notices.fillMissingCategory(sourceId, externalIds, category);
+    }
+
+    @Transactional
     public void applyContent(Long noticeId, DetailContent content) {
-        notices.findById(noticeId).ifPresent(n -> n.applyContent(content.html(), content.text()));
+        notices.findById(noticeId).ifPresent(n -> {
+            n.applyContent(content.html(), content.text());
+            n.assignBoardMedia(content.thumbnailUrl(), content.attachments());
+        });
+    }
+
+    @Transactional
+    public void recordMediaAttempt(Long noticeId, Instant attemptedAt) {
+        notices.findById(noticeId).ifPresent(n -> n.markMediaAttempted(attemptedAt));
     }
 
     @Transactional

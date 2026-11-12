@@ -1,0 +1,27 @@
+name: 연결된 이슈 닫기
+
+# PR 대상이 기본 브랜치(main)가 아닌 develop이라 GitHub의 "Closes #N" 자동 닫기가 동작하지 않는다.
+# develop에 머지되면 PR 본문의 Closes/Fixes/Resolves #N 이슈를 대신 닫는다.
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop]
+
+permissions:
+  issues: write
+
+jobs:
+  close:
+    if: github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          nums=$(printf '%s' "$BODY" | grep -oiE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?) +#[0-9]+' | grep -oE '[0-9]+' | sort -u || true)
+          for n in $nums; do
+            gh issue close "$n" -R "$REPO" -c "#$PR 머지로 완료됨" || echo "#$n 닫기 실패(이미 닫혔거나 PR 번호)"
+          done

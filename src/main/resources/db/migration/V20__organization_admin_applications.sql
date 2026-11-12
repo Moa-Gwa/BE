@@ -1,0 +1,32 @@
+CREATE TABLE admin_applications (
+    id                BIGSERIAL PRIMARY KEY,
+    organization_name VARCHAR(100) NOT NULL,
+    university        VARCHAR(100) NOT NULL,
+    department        VARCHAR(100) NOT NULL,
+    contact_name      VARCHAR(50)  NOT NULL,
+    email             VARCHAR(200) NOT NULL,
+    phone             VARCHAR(40)  NOT NULL,
+    channel_url       VARCHAR(500) NOT NULL,
+    reason            TEXT         NOT NULL,
+    status            VARCHAR(20)  NOT NULL DEFAULT 'PENDING'
+                      CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    rejection_reason  VARCHAR(500),
+    organization_id   BIGINT REFERENCES organizations (id),
+    admin_id          BIGINT REFERENCES admins (id),
+    setup_token_hash  VARCHAR(64),
+    setup_expires_at  TIMESTAMPTZ,
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    resolved_at       TIMESTAMPTZ
+);
+
+CREATE INDEX idx_admin_applications_status ON admin_applications (status, created_at);
+
+-- 대기 중이거나 승인된 신청은 메일당 하나만 허용(반복 신청 방지). 거절된 뒤 재신청은 가능
+CREATE UNIQUE INDEX uq_admin_applications_active_email ON admin_applications (email)
+    WHERE status IN ('PENDING', 'APPROVED');
+
+-- 신청 메일이 로그인 아이디가 되므로 신청 email 컬럼 길이에 맞춤
+ALTER TABLE admins ALTER COLUMN login_id TYPE VARCHAR(200);
+
+-- 기존 계정은 활성 상태 유지. 신청으로 발급된 계정은 비밀번호 설정 전까지 false
+ALTER TABLE admins ADD COLUMN activated BOOLEAN NOT NULL DEFAULT TRUE;
