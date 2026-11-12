@@ -236,6 +236,36 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void studentReadsNotificationsAndKeepsNotificationSettings() throws Exception {
+        mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("organizationIds", List.of(council.getId())))))
+                .andExpect(status().isOk());
+        createNotice(admin, Map.of("title", "알림1 " + tag));
+        createNotice(admin, Map.of("title", "알림2 " + tag));
+        JsonNode list = json.readTree(mvc.perform(get("/api/me/notifications").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.unreadCount").value(2)).andReturn().getResponse().getContentAsString());
+
+        mvc.perform(put("/api/me/notifications/" + list.get("items").get(0).get("id").asLong() + "/read")
+                .header("Authorization", studentToken())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/me/notifications").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.unreadCount").value(1)).andExpect(jsonPath("$.items[0].read").value(true));
+        mvc.perform(put("/api/me/notifications/read-all").header("Authorization", studentToken()))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/me/notifications").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.unreadCount").value(0));
+
+        mvc.perform(get("/api/me/notification-settings").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.newNotice").value(true)).andExpect(jsonPath("$.urgent").value(true));
+        Map<String, Boolean> off = Map.of("newNotice", false, "eventStart", true, "deadlineSoon", false, "urgent", true);
+        mvc.perform(put("/api/me/notification-settings").header("Authorization", studentToken())
+                .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(off))).andExpect(status().isOk());
+        mvc.perform(get("/api/me/notification-settings").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.newNotice").value(false)).andExpect(jsonPath("$.deadlineSoon").value(false))
+                .andExpect(jsonPath("$.eventStart").value(true));
+    }
+
+    @Test
     void profileRejectsOrganizationsOfTheWrongType() throws Exception {
         mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
                         .contentType(MediaType.APPLICATION_JSON)
