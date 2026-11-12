@@ -40,7 +40,7 @@ scripts/run-local.sh
 
 ### Docker로 서버·프론트·DB 한 번에 실행
 
-FE 저장소가 `../FE`에 있어야 함. 로컬에서 띄운 서버·프론트(8080, 3000)는 먼저 종료.
+FE 저장소를 `../FE`에 `develop` 브랜치로 받아 둬야 함(FE Dockerfile은 Moa-Gwa/FE#52부터 포함). 로컬에서 띄운 서버·프론트(8080, 3000)는 먼저 종료.
 
 ```bash
 docker compose up --build
