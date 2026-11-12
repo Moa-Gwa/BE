@@ -2,7 +2,6 @@
 #   docker compose up --build   → 프론트 http://localhost:3000, 서버 http://localhost:8080
 #   docker compose up -d postgres → DB만 실행(서버는 scripts/run-local.sh로 직접 실행)
 # 서버 비밀값은 BE/.env에서 실행 시점에 주입하고 이미지에 넣지 않는다.
-name: moagwa
 services:
   postgres:
     image: postgres:16
