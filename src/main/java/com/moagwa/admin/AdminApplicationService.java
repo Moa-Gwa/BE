@@ -54,7 +54,7 @@ class AdminApplicationService {
         this.admins = admins;
         this.encoder = encoder;
         this.mailer = mailer;
-        this.frontendUrl = frontendUrl;
+        this.frontendUrl = validateFrontendUrl(frontendUrl);
     }
 
     Submitted submit(ApplicationForm form) {
@@ -144,6 +144,24 @@ class AdminApplicationService {
         long adminId = applications.consumeSetupToken(sha256(req.token()))
                 .orElseThrow(() -> ApiException.badRequest("설정 링크가 만료되었거나 이미 사용되었습니다."));
         admins.findById(adminId).orElseThrow().activate(encoder.encode(req.password()));
+    }
+
+    private static String validateFrontendUrl(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("moagwa.frontend-url must not be blank");
+        }
+
+        try {
+            var uri = java.net.URI.create(value.trim());
+            if (!uri.isAbsolute()
+                    || uri.getHost() == null
+                    || !java.util.Set.of("http", "https").contains(uri.getScheme())) {
+                throw new IllegalStateException("moagwa.frontend-url must be an absolute HTTP(S) URL");
+            }
+            return value.trim().replaceAll("/+$", "");
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("moagwa.frontend-url is invalid", e);
+        }
     }
 
     private static Organization verifiedOrganization(Application a) {
