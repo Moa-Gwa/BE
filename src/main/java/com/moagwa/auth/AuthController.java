@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -56,6 +57,10 @@ class AuthController {
     @Value("${moagwa.google.allowed-email-domain:}")
     private String googleAllowedEmailDomain;
 
+    /** 운영자로 로그인시킬 관리자 아이디(쉼표 구분). DB의 role과 함께 확인 */
+    @Value("${moagwa.operator-login-ids:}")
+    private List<String> operatorLoginIds;
+
     @PostMapping("/admin/auth/login")
     @Transactional(readOnly = true)
     AdminSession adminLogin(@Valid @RequestBody AdminLogin body, HttpServletResponse response) {
@@ -63,8 +68,11 @@ class AuthController {
                 .filter(a -> encoder.matches(body.password(), a.getPasswordHash()))
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."));
         var org = admin.getOrganization();
-        cookies.issue(response, jwt.issueAdmin(admin.getId(), org.getId()));
-        return new AdminSession(admin.getName(), new OrgInfo(org.getId(), org.getName(), org.getType().name()));
+        boolean operator = admin.isOperator() || operatorLoginIds.stream().map(String::trim)
+                .anyMatch(admin.getLoginId()::equals);
+        cookies.issue(response, jwt.issueAdmin(admin.getId(), org.getId(), operator));
+        return new AdminSession(admin.getName(), new OrgInfo(org.getId(), org.getName(), org.getType().name()),
+                operator);
     }
 
     /** Exchanges a Kakao authorization code for our own session. Needs moagwa.kakao.client-id to be configured. */
@@ -197,7 +205,8 @@ class AuthController {
     }
 
     /** 토큰은 응답 본문에 담지 않고 HttpOnly 쿠키로만 보낸다. */
-    record AdminSession(String name, OrgInfo organization) {
+    /** operator = 서비스 운영자 여부. 운영자 전용 화면 노출에 사용 */
+    record AdminSession(String name, OrgInfo organization, boolean operator) {
     }
 
     record StudentSession(String nickname, boolean onboarded, boolean verified) {

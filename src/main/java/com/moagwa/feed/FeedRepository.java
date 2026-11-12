@@ -56,7 +56,7 @@ class FeedRepository {
         }
         if (f.q() != null && !f.q().isBlank()) {
             where.add("(f.title ILIKE :q ESCAPE '\\' OR f.summary ILIKE :q ESCAPE '\\' "
-                    + "OR f.organization_name ILIKE :q ESCAPE '\\')");
+                    + "OR f.organization_name ILIKE :q ESCAPE '\\' OR f.keywords ILIKE :q ESCAPE '\\')");
             p.addValue("q", "%" + escapeLike(f.q().trim()) + "%");
         }
         if (f.forUserId() != null) {
@@ -117,26 +117,36 @@ class FeedRepository {
                 MAPPER);
     }
 
-    List<ScheduleEntry> schedule(LocalDate from, LocalDate toExclusive) {
+    /** 단체가 직접 올린 공지 전체와, 로그인한 학생이 저장한 공지(출처 무관)의 마감·행사 일정 */
+    List<ScheduleEntry> schedule(LocalDate from, LocalDate toExclusive, Long viewerId) {
         String sql = """
+                WITH items AS (
+                    SELECT f.*, (b.user_id IS NOT NULL) AS bookmarked
+                      FROM v_feed_items f
+                      LEFT JOIN bookmarks b
+                        ON b.user_id = CAST(:viewer AS bigint) AND b.source = f.source AND b.notice_id = f.id
+                     WHERE f.source = 'MANUAL' OR b.user_id IS NOT NULL
+                )
                 SELECT * FROM (
-                    SELECT 'EVENT' AS type, f.event_start_at AS at, f.source, f.id, f.title,
-                           f.organization_name, f.location
-                      FROM v_feed_items f WHERE f.source = 'MANUAL' AND f.event_start_at IS NOT NULL
+                    SELECT 'EVENT' AS type, i.event_start_at AS at, i.source, i.id, i.title,
+                           i.organization_name, i.location, i.bookmarked
+                      FROM items i WHERE i.event_start_at IS NOT NULL
                     UNION ALL
-                    SELECT 'DEADLINE', f.deadline_at, f.source, f.id, f.title, f.organization_name, f.location
-                      FROM v_feed_items f WHERE f.source = 'MANUAL' AND f.deadline_at IS NOT NULL
+                    SELECT 'DEADLINE', i.deadline_at, i.source, i.id, i.title, i.organization_name, i.location,
+                           i.bookmarked
+                      FROM items i WHERE i.deadline_at IS NOT NULL
                 ) s
                 WHERE s.at >= :from AND s.at < :to
                 ORDER BY s.at
                 """;
         MapSqlParameterSource p = new MapSqlParameterSource()
+                .addValue("viewer", viewerId)
                 .addValue("from", Timestamp.from(from.atStartOfDay(KST).toInstant()))
                 .addValue("to", Timestamp.from(toExclusive.atStartOfDay(KST).toInstant()));
         return jdbc.query(sql, p, (rs, i) -> new ScheduleEntry(
                 rs.getString("type"), rs.getTimestamp("at").toInstant(), rs.getString("source"),
                 rs.getLong("id"), rs.getString("title"), rs.getString("organization_name"),
-                rs.getString("location")));
+                rs.getString("location"), rs.getBoolean("bookmarked")));
     }
 
     private static String orderBy(String sort) {

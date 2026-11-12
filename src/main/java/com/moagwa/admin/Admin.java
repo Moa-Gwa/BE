@@ -46,4 +46,13 @@ public class Admin {
         this.name = name;
         this.organization = organization;
     }
+
+    /** 서비스 운영자. 단체 소속과 별개로 크롤링 공지 날짜 교정 등 서비스 전체 관리 권한 보유 */
+    public boolean isOperator() {
+        return "OPERATOR".equals(role);
+    }
+
+    void grantOperator() {
+        this.role = "OPERATOR";
+    }
 }

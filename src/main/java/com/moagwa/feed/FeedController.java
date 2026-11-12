@@ -104,11 +104,11 @@ class FeedController {
     }
 
     @GetMapping("/schedule")
-    List<ScheduleEntry> schedule(@RequestParam LocalDate from, @RequestParam LocalDate to) {
+    List<ScheduleEntry> schedule(@RequestParam LocalDate from, @RequestParam LocalDate to, Authentication auth) {
         if (to.isBefore(from) || from.plusDays(62).isBefore(to)) {
             throw ApiException.badRequest("조회 기간은 최대 62일입니다.");
         }
-        return feed.schedule(from, to.plusDays(1));
+        return feed.schedule(from, to.plusDays(1), CurrentUser.studentIdOrNull(auth));
     }
 
     record CategoryView(long id, String code, String name) {
