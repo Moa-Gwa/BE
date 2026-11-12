@@ -17,6 +17,7 @@ import com.moagwa.organization.OrganizationRepository;
 import com.moagwa.realtime.NoticeChangedEvent;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -211,7 +212,7 @@ public class AdminNoticeService {
                     throw ApiException.badRequest("이미지와 사진 설명 개수가 일치해야 합니다.");
                 }
                 List<String> captions = b.captions() == null
-                        ? java.util.Collections.nCopies(b.images().size(), "")
+                        ? Collections.nCopies(b.images().size(), "")
                         : b.captions().stream().map(String::trim).toList();
                 out.add(new NoticeBlock(NoticeBlock.IMAGES, null, List.copyOf(b.images()),
                         b.layout() == null ? NoticeBlock.CAROUSEL : b.layout(), captions));
