@@ -54,6 +54,13 @@ class AuthController {
     @Value("${moagwa.kakao.client-secret:}")
     private String kakaoClientSecret;
 
+    /** 카카오 인증·API 서버 주소. 테스트에서 가짜 서버로 바꿀 때만 지정함 */
+    @Value("${moagwa.kakao.auth-url:https://kauth.kakao.com}")
+    private String kakaoAuthUrl;
+
+    @Value("${moagwa.kakao.api-url:https://kapi.kakao.com}")
+    private String kakaoApiUrl;
+
     @Value("${moagwa.google.allowed-email-domain:}")
     private String googleAllowedEmailDomain;
 
@@ -94,9 +101,9 @@ class AuthController {
         Map<?, ?> token;
         Map<?, ?> profile;
         try {
-            token = http.post().uri("https://kauth.kakao.com/oauth/token")
+            token = http.post().uri(kakaoAuthUrl + "/oauth/token")
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve().body(Map.class);
-            profile = http.get().uri("https://kapi.kakao.com/v2/user/me")
+            profile = http.get().uri(kakaoApiUrl + "/v2/user/me")
                     .header("Authorization", "Bearer " + token.get("access_token")).retrieve().body(Map.class);
         } catch (RestClientResponseException e) {
             log.warn("Kakao authentication request failed: status={}", e.getStatusCode());
