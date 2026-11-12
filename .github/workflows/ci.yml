@@ -81,9 +81,13 @@ jobs:
           ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
       - name: 이미지 태그 변경·푸시
         env:
+          GH_TOKEN: ${{ github.token }}
           IMAGE: ghcr.io/moa-gwa/be
           SOURCE: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
         run: |
+          # 그사이 main에 더 새 커밋이 들어왔으면 그 실행이 배포하므로 건너뜀(늦게 끝난 이전 빌드가 운영을 되돌리지 않도록)
+          LATEST=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" -q .sha)
+          [ "$LATEST" = "$GITHUB_SHA" ] || { echo "main 최신 커밋 ${LATEST::7}이 아니므로 건너뜀"; exit 0; }
           TAG="sha-${GITHUB_SHA::7}"
           FILE=k8s/overlays/prod/kustomization.yaml
           # images 항목에서 이 이미지 이름 다음 줄의 newTag 교체
