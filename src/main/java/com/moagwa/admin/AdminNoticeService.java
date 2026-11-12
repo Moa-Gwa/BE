@@ -27,6 +27,8 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+
+
 /** All operations are scoped to the organization in the caller's token; ids from the client are never trusted. */
 @Service
 @RequiredArgsConstructor
