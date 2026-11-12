@@ -84,6 +84,13 @@ class MarketItemRepository {
                 (rs, n) -> new SaleState(rs.getLong("seller_id"), rs.getString("status"))).stream().findFirst();
     }
 
+    /** 호출하는 트랜잭션이 끝날 때까지 물품 행을 잠근다. 거래 흐름은 물품 → 요청 순서로 잠근다. */
+    Optional<SaleState> lockSaleState(long id) {
+        return jdbc.query("SELECT seller_id, status FROM market_items WHERE id = :id FOR UPDATE",
+                new MapSqlParameterSource("id", id),
+                (rs, n) -> new SaleState(rs.getLong("seller_id"), rs.getString("status"))).stream().findFirst();
+    }
+
     long insert(long sellerId, ItemFields fields) {
         return jdbc.queryForObject("""
                 INSERT INTO market_items (seller_id, title, description, price, category, trade_place)
@@ -111,6 +118,12 @@ class MarketItemRepository {
     boolean reserveIfOnSale(long id) {
         return jdbc.update("UPDATE market_items SET status = 'RESERVED', updated_at = now() "
                 + "WHERE id = :id AND status = 'ON_SALE'", new MapSqlParameterSource("id", id)) > 0;
+    }
+
+    /** 예약 중일 때만 판매 중으로 되돌린다. */
+    void releaseIfReserved(long id) {
+        jdbc.update("UPDATE market_items SET status = 'ON_SALE', updated_at = now() "
+                + "WHERE id = :id AND status = 'RESERVED'", new MapSqlParameterSource("id", id));
     }
 
     /** 판매자가 자기 물품을 볼 때는 조회수를 올리지 않는다. */
