@@ -8,7 +8,7 @@ import java.util.List;
  * either as a swipeable CAROUSEL or a vertical STACK.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public record NoticeBlock(String type, String text, List<String> images, String layout) {
+public record NoticeBlock(String type, String text, List<String> images, String layout, List<String> captions) {
 
     public static final String TEXT = "TEXT";
     public static final String IMAGES = "IMAGES";
