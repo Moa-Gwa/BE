@@ -88,14 +88,35 @@ public class NoticeQueryService {
                 new MapSqlParameterSource("id", id), String.class);
     }
 
+    /** Count each student once per rolling 24 hours; record and counter commit atomically. */
     @Transactional
-    public void increaseView(String source, long id) {
-        if (source.equals("MANUAL")) {
-            notices.incrementViews(id);
-        } else {
-            jdbc.update("UPDATE crawled_notices SET view_count = view_count + 1 WHERE id = :id",
-                    new MapSqlParameterSource("id", id));
+    public void increaseView(String source, long id, Long userId) {
+        if (userId == null) {
+            throw new ApiException(org.springframework.http.HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
         }
+        if ("MANUAL".equals(source)) {
+            notices.findActive(id).filter(Notice::isVisibleToStudents)
+                    .orElseThrow(() -> ApiException.notFound("공지를 찾을 수 없습니다."));
+        } else if ("CRAWLED".equals(source)) {
+            Boolean exists = jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM crawled_notices WHERE id = :id)",
+                    new MapSqlParameterSource("id", id), Boolean.class);
+            if (!Boolean.TRUE.equals(exists)) throw ApiException.notFound("공지를 찾을 수 없습니다.");
+        } else {
+            throw ApiException.badRequest("지원하지 않는 공지 출처입니다.");
+        }
+        MapSqlParameterSource params = new MapSqlParameterSource("id", id)
+                .addValue("user", userId).addValue("source", source);
+        int counted = jdbc.update("""
+                INSERT INTO notice_view_records(user_id, source, notice_id, viewed_at)
+                VALUES (:user, :source, :id, statement_timestamp())
+                ON CONFLICT (user_id, source, notice_id) DO UPDATE
+                SET viewed_at = EXCLUDED.viewed_at
+                WHERE notice_view_records.viewed_at <= EXCLUDED.viewed_at - interval '24 hours'
+                """, params);
+        if (counted == 0) return;
+        int updated = "MANUAL".equals(source) ? notices.incrementViews(id)
+                : jdbc.update("UPDATE crawled_notices SET view_count = view_count + 1 WHERE id = :id", params);
+        if (updated != 1) throw ApiException.notFound("공지를 찾을 수 없습니다.");
     }
 
     private boolean isBookmarked(Long viewerId, String source, long id) {

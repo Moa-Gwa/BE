@@ -54,7 +54,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/feed/**", "/api/notices/**", "/api/crawled-notices/**",
                                 "/api/organizations/**", "/api/categories", "/api/schedule").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/notices/*/view", "/api/crawled-notices/*/view")
-                        .permitAll()
+                        .hasRole("STUDENT")
                         .requestMatchers(HttpMethod.POST, "/api/crawled-notices/*/date-corrections").hasRole("STUDENT")
                         .requestMatchers("/api/admin/date-corrections/**").hasRole("OPERATOR")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")

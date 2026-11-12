@@ -288,7 +288,7 @@ class ApiIntegrationTest {
         mvc.perform(get("/api/crawled-notices/" + c.getId()))
                 .andExpect(jsonPath("$.contentHtml").value("<p>본문</p>"))
                 .andExpect(jsonPath("$.externalLink").value("https://example.com/1"));
-        mvc.perform(post("/api/crawled-notices/" + c.getId() + "/view")).andExpect(status().isNoContent());
+        mvc.perform(post("/api/crawled-notices/" + c.getId() + "/view").header("Authorization", studentToken())).andExpect(status().isNoContent());
         mvc.perform(get("/api/crawled-notices/" + c.getId())).andExpect(jsonPath("$.viewCount").value(1));
     }
 
@@ -454,4 +454,77 @@ class ApiIntegrationTest {
         // 다른 사람(비로그인)에게는 보이지 않음
         mvc.perform(get("/api/schedule").param("from", from).param("to", to)).andExpect(jsonPath(path).isEmpty());
     }
+    @Test
+    void noticeViewsCountEachStudentOncePer24HoursAndRejectAnonymousOrAdmin() throws Exception {
+        long id = createNotice(admin, Map.of("title", "조회수 " + tag)).get("id").asLong();
+        String endpoint = "/api/notices/" + id + "/view";
+        mvc.perform(post(endpoint)).andExpect(status().isUnauthorized());
+        mvc.perform(post(endpoint).header("Authorization", adminToken(admin))).andExpect(status().isForbidden());
+        for (int i = 0; i < 3; i++) {
+            mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+        }
+        mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.viewCount").value(1));
+        jdbc.update("UPDATE notice_view_records SET viewed_at = now() - interval '23 hours 59 minutes' WHERE notice_id = ? AND source = 'MANUAL'", id);
+        var before = jdbc.queryForObject("SELECT viewed_at FROM notice_view_records WHERE notice_id = ? AND source = 'MANUAL' AND user_id = ?", java.sql.Timestamp.class, id, student.getId());
+        mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.viewCount").value(1));
+        assertThat(jdbc.queryForObject("SELECT viewed_at FROM notice_view_records WHERE notice_id = ? AND source = 'MANUAL' AND user_id = ?", java.sql.Timestamp.class, id, student.getId())).isEqualTo(before);
+        jdbc.update("UPDATE notice_view_records SET viewed_at = now() - interval '24 hours' WHERE notice_id = ? AND source = 'MANUAL'", id);
+        mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+        mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+        mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.viewCount").value(2));
+        assertThat(jdbc.queryForObject("SELECT viewed_at FROM notice_view_records WHERE notice_id = ? AND source = 'MANUAL' AND user_id = ?", java.sql.Timestamp.class, id, student.getId())).isAfter(before);
+        User second = users.save(new User("DEV", "viewer-" + tag, "다른학생"));
+        mvc.perform(post(endpoint).header("Authorization", "Bearer " + jwt.issueStudent(second.getId())))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.viewCount").value(3));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notice_view_records WHERE source = 'MANUAL' AND notice_id = ?", Integer.class, id)).isEqualTo(2);
+    }
+
+    @Test
+    void concurrentCrawledViewsCountOnce() throws Exception {
+        CrawlSource source = sources.save(new CrawlSource("views-" + tag, council, "https://example.com/list"));
+        CrawledNotice notice = crawled.save(new CrawledNotice(source, "views", "조회 테스트", "https://example.com/views", false,
+                Instant.now(), Instant.now()));
+        String endpoint = "/api/crawled-notices/" + notice.getId() + "/view";
+        for (int round = 1; round <= 2; round++) {
+            if (round == 2) {
+                jdbc.update("UPDATE notice_view_records SET viewed_at = now() - interval '24 hours' WHERE source = 'CRAWLED' AND notice_id = ?", notice.getId());
+            }
+            var executor = java.util.concurrent.Executors.newFixedThreadPool(8);
+            var start = new java.util.concurrent.CountDownLatch(1);
+            try {
+                var futures = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+                for (int i = 0; i < 8; i++) {
+                    futures.add(executor.submit(() -> {
+                        start.await();
+                        mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+                        return null;
+                    }));
+                }
+                start.countDown();
+                for (var future : futures) future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            } finally {
+                executor.shutdownNow();
+            }
+            assertThat(jdbc.queryForObject("SELECT view_count FROM crawled_notices WHERE id = ?", Integer.class, notice.getId())).isEqualTo(round);
+            mvc.perform(post(endpoint).header("Authorization", studentToken())).andExpect(status().isNoContent());
+            assertThat(jdbc.queryForObject("SELECT view_count FROM crawled_notices WHERE id = ?", Integer.class, notice.getId())).isEqualTo(round);
+        }
+    }
+
+    @Test
+    void unviewableNoticesCannotCreateViewRecords() throws Exception {
+        long draft = createNotice(admin, Map.of("title", "비공개 " + tag, "publishMode", "DRAFT")).get("id").asLong();
+        mvc.perform(post("/api/notices/" + draft + "/view").header("Authorization", studentToken()))
+                .andExpect(status().isNotFound());
+        long deleted = createNotice(admin, Map.of("title", "삭제됨 " + tag)).get("id").asLong();
+        jdbc.update("UPDATE notices SET deleted_at = now() WHERE id = ?", deleted);
+        mvc.perform(post("/api/notices/" + deleted + "/view").header("Authorization", studentToken()))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/crawled-notices/9223372036854775807/view").header("Authorization", studentToken()))
+                .andExpect(status().isNotFound());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notice_view_records WHERE user_id = ?", Integer.class, student.getId())).isZero();
+    }
+
 }
