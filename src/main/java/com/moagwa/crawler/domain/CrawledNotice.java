@@ -77,6 +77,28 @@ public class CrawledNotice {
     @Column(name = "url", nullable = false, length = 500)
     private List<String> imageUrls = new ArrayList<>();
 
+    @ElementCollection
+    @CollectionTable(name = "crawled_notice_attachments", joinColumns = @JoinColumn(name = "notice_id"))
+    @OrderColumn(name = "sort_order")
+    private List<CrawledAttachment> attachments = new ArrayList<>();
+
+    @Column(name = "media_fetched", nullable = false)
+    private boolean mediaFetched;
+
+    @Column(name = "media_attempted_at")
+    private Instant mediaAttemptedAt;
+
+    public void markMediaAttempted() { this.mediaAttemptedAt = Instant.now(); }
+
+    /** Board images stay in the HTML body; Instagram keeps its separate gallery. */
+    public void assignBoardMedia(String thumbnailUrl, List<CrawledAttachment> files) {
+        this.thumbnailUrl = thumbnailUrl;
+        this.attachments.clear();
+        this.attachments.addAll(files);
+        this.mediaFetched = true;
+        markMediaAttempted();
+    }
+
     public CrawledNotice(CrawlSource source, String externalId, String title, String url,
                          boolean pinned, Instant publishedAt, Instant crawledAt) {
         this.source = source;

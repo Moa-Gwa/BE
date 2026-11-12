@@ -25,6 +25,10 @@ public interface CrawledNoticeRepository extends JpaRepository<CrawledNotice, Lo
     @Query("select n from CrawledNotice n where n.source.id = :sourceId and n.contentFetched = false order by n.id desc")
     List<CrawledNotice> findUnfetched(@Param("sourceId") Long sourceId, Pageable pageable);
 
+    @Query("select n from CrawledNotice n where n.source.id = :sourceId and n.contentFetched = true "
+            + "and n.mediaFetched = false order by n.mediaAttemptedAt nulls first, n.id")
+    List<CrawledNotice> findMissingMedia(@Param("sourceId") Long sourceId, Pageable pageable);
+
     /** Back-fills the category of already stored notices that were saved before categories were parsed. */
     @Modifying
     @Query("update CrawledNotice n set n.category = :category where n.source.id = :sourceId "

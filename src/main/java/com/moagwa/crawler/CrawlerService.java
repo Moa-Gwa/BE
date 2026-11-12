@@ -76,6 +76,7 @@ public class CrawlerService {
             }
 
             retryMissingContent(source);
+            retryMissingMedia(source);
             int created = saveNewItems(source, items, firstCrawl);
 
             persistence.recordSuccess(source.getId(), clock.instant(), false);
@@ -135,6 +136,15 @@ public class CrawlerService {
         for (CrawledNotice notice : persistence.findUnfetched(source.getId(), properties.detailRetryBatch())) {
             fetchDetail(source, notice.getUrl())
                     .ifPresent(content -> persistence.applyContent(notice.getId(), content));
+        }
+    }
+
+    /** mediaFetched distinguishes a text-only notice from an older notice not yet inspected. */
+    private void retryMissingMedia(CrawlSource source) {
+        for (CrawledNotice notice : persistence.findMissingMedia(source.getId(), properties.detailRetryBatch())) {
+            fetchDetail(source, notice.getUrl())
+                    .ifPresentOrElse(content -> persistence.applyContent(notice.getId(), content),
+                            () -> persistence.recordMediaAttempt(notice.getId()));
         }
     }
 

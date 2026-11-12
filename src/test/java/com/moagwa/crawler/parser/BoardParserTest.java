@@ -76,6 +76,38 @@ class BoardParserTest {
         assertThat(parser.parseDetail(doc, source)).isEmpty();
     }
 
+    @Test
+    void extractsFirstRealImageAndAttachmentNamesAndCanonicalDownloadUrls() throws IOException {
+        String url = "https://school.example/board/notice.do?mode=view&articleNo=123";
+        DetailContent content = parser.parseDetail(load("board-media-detail.html", url), source).orElseThrow();
+        assertThat(content.thumbnailUrl()).isEqualTo("https://school.example/images/poster.jpg");
+        assertThat(content.attachments()).extracting(com.moagwa.crawler.domain.CrawledAttachment::getFileName)
+                .containsExactly("모집 안내.pdf", "신청서.hwpx");
+        assertThat(content.attachments()).extracting(com.moagwa.crawler.domain.CrawledAttachment::getUrl)
+                .containsExactly("https://school.example/board/notice.do?mode=download&articleNo=123&attachNo=456", "https://school.example/files/form.hwpx");
+    }
+
+    @Test
+    void textOnlyNoticeHasNoThumbnailOrAttachments() {
+        DetailContent content = parser.parseDetail(Jsoup.parse("<div class='b-con-box'>이미지 없는 공지</div>", LIST_URL), source).orElseThrow();
+        assertThat(content.thumbnailUrl()).isNull();
+        assertThat(content.attachments()).isEmpty();
+    }
+
+    @Test
+    void rejectsIconsHiddenImagesSmallInlineDimensionsAndUnsafeUrls() {
+        String html = "<div class='b-con-box'><img src='/spacer.gif'><img src='/normal.jpg' style='width: 1px'>"
+                + "<img src='/hidden.jpg' style='display: none'><img src='javascript:alert(1)'></div>";
+        assertThat(parser.parseDetail(Jsoup.parse(html, LIST_URL), source).orElseThrow().thumbnailUrl()).isNull();
+    }
+
+    @Test
+    void attachmentSelectorCanBeCustomizedWithoutChangingTheParser() {
+        org.springframework.test.util.ReflectionTestUtils.setField(source, "attachmentSelector", ".downloads a[href]");
+        DetailContent content = parser.parseDetail(Jsoup.parse("<div class='b-con-box'>공지</div><div class='downloads'><a href='/file.zip' download='자료.zip'></a></div>", LIST_URL), source).orElseThrow();
+        assertThat(content.attachments()).extracting(com.moagwa.crawler.domain.CrawledAttachment::getFileName).containsExactly("자료.zip");
+    }
+
     private static Document load(String fixture, String baseUri) throws IOException {
         try (InputStream in = BoardParserTest.class.getResourceAsStream("/fixtures/" + fixture)) {
             return Jsoup.parse(in, StandardCharsets.UTF_8.name(), baseUri);

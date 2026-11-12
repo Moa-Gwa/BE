@@ -39,6 +39,8 @@ class CrawlerServiceTest {
     @Autowired CrawledNoticeRepository notices;
     @Autowired OrganizationRepository organizations;
     @Autowired ApplicationEvents events;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
+    @Autowired com.moagwa.feed.NoticeQueryService details;
     @MockBean PageFetcher fetcher;
 
     private CrawlSource source;
@@ -126,6 +128,47 @@ class CrawlerServiceTest {
 
         assertThat(result.status()).isEqualTo(CrawlStatus.EMPTY);
         assertThat(sources.findById(source.getId()).orElseThrow().getLastStatus()).isEqualTo(CrawlStatus.EMPTY);
+    }
+
+    @Test
+    void existingNoticesBackfillMediaAndRepeatedCollectionReplacesAttachments() throws IOException {
+        stubSite();
+        crawler.crawlSource(source);
+        long id = mine().get(0).getId();
+        jdbc.update("UPDATE crawled_notices SET media_fetched = false, thumbnail_url = null WHERE source_id = ?", source.getId());
+        doReturn(load("board-media-detail.html", LIST_URL)).when(fetcher).fetch(anyString());
+        doReturn(load("catholic-list.html", LIST_URL)).when(fetcher).fetch(LIST_URL);
+        crawler.crawlSource(sources.findById(source.getId()).orElseThrow());
+        assertThat(mine()).allMatch(CrawledNotice::isMediaFetched);
+        assertThat(jdbc.queryForObject("SELECT thumbnail_url FROM crawled_notices WHERE id = ?", String.class, id)).endsWith("/images/poster.jpg");
+        assertThat(details.crawled(id, null).attachments()).hasSize(2);
+        jdbc.update("UPDATE crawled_notices SET media_fetched = false WHERE id = ?", id);
+        crawler.crawlSource(sources.findById(source.getId()).orElseThrow());
+        assertThat(details.crawled(id, null).attachments()).hasSize(2);
+        assertThat(events.stream(CrawledNoticeCreatedEvent.class)).isEmpty();
+
+        // A failed refresh must not erase attachments that have already been collected.
+        jdbc.update("UPDATE crawled_notices SET media_fetched = false WHERE id = ?", id);
+        doThrow(new IOException("timeout")).when(fetcher).fetch(anyString());
+        doReturn(load("catholic-list.html", LIST_URL)).when(fetcher).fetch(LIST_URL);
+        crawler.crawlSource(sources.findById(source.getId()).orElseThrow());
+        assertThat(details.crawled(id, null).attachments()).hasSize(2);
+    }
+
+    @Test
+    void instagramGalleryIsNotChangedBySchoolMediaBackfill() throws IOException {
+        CrawlSource instagram = new CrawlSource("instagram-regression-" + source.getId(), source.getOrganization(), "https://www.instagram.com/example/");
+        instagram.disable();
+        instagram = sources.save(instagram);
+        CrawledNotice imported = new CrawledNotice(instagram, "post", "인스타 공지", "https://www.instagram.com/p/example/", false, java.time.Instant.now(), java.time.Instant.now());
+        imported.applyContent(null, "인스타 본문");
+        imported.assignImages(List.of("https://cdn.example/instagram.jpg"));
+        long id = notices.saveAndFlush(imported).getId();
+        stubSite();
+        crawler.crawlSource(source);
+        assertThat(sources.findAllEnabled()).extracting(CrawlSource::getCode).doesNotContain("instagram-regression-" + source.getId());
+        assertThat(details.crawled(id, null).images()).containsExactly("https://cdn.example/instagram.jpg");
+        assertThat(jdbc.queryForObject("SELECT thumbnail_url FROM crawled_notices WHERE id = ?", String.class, id)).isEqualTo("https://cdn.example/instagram.jpg");
     }
 
     private void stubSite() throws IOException {

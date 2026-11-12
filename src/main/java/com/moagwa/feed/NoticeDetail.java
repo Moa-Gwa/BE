@@ -1,6 +1,7 @@
 package com.moagwa.feed;
 
 import com.moagwa.notice.NoticeBlock;
+import com.moagwa.crawler.domain.CrawledAttachment;
 import java.time.Instant;
 import java.util.List;
 
@@ -31,5 +32,6 @@ public record NoticeDetail(
         int bookmarkCount,
         boolean bookmarked,
         String dateEvidence,
-        List<String> keywords) {
+        List<String> keywords,
+        List<CrawledAttachment> attachments) {
 }
