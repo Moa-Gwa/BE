@@ -16,11 +16,16 @@ import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
 import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +47,7 @@ class MarketApiIntegrationTest {
     @Autowired JwtService jwt;
     @Autowired UserRepository users;
     @Autowired JdbcTemplate jdbc;
+    @Autowired DataSource dataSource;
 
     private String tag;
     private User seller;
@@ -263,6 +269,51 @@ class MarketApiIntegrationTest {
         act("reject", 0, seller, 404);
         act("accept", rejected, seller, 409);
         assertThat(requestStatus(accepted)).isEqualTo("ACCEPTED");
+    }
+
+    /**
+     * 다른 트랜잭션이 물품 행을 잠그고 있으면 거절·수락·취소는 물품 잠금을 기다리고,
+     * 그동안 요청 행은 아직 잠그지 않아야 함(물품 → 요청 순서)
+     */
+    @Test
+    void requestTransitionsLockTheItemBeforeTheRequest() throws Exception {
+        record Case(String action, boolean byBuyer) {
+        }
+        for (Case c : List.of(new Case("reject", false), new Case("accept", false), new Case("cancel", true))) {
+            long id = createItem(seller, "잠금 순서 " + c.action() + " " + tag);
+            long requestId = requestTrade(id, buyer, 201);
+            try (Connection holder = dataSource.getConnection()) {
+                holder.setAutoCommit(false);
+                lockRow(holder, "SELECT id FROM market_items WHERE id = ? FOR UPDATE", id);
+
+                CompletableFuture<Integer> call = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return mvc.perform(post("/api/market/requests/" + requestId + "/" + c.action())
+                                        .header("Authorization", token(c.byBuyer() ? buyer : seller)))
+                                .andReturn().getResponse().getStatus();
+                    } catch (Exception e) {
+                        throw new IllegalStateException(e);
+                    }
+                });
+                Thread.sleep(500);
+                assertThat(call).as(c.action() + "은 물품 잠금을 기다려야 함").isNotDone();
+                try (Connection probe = dataSource.getConnection()) {
+                    probe.setAutoCommit(false);
+                    // 요청 행을 먼저 잠갔다면 NOWAIT가 즉시 실패함
+                    lockRow(probe, "SELECT id FROM market_requests WHERE id = ? FOR UPDATE NOWAIT", requestId);
+                    probe.rollback();
+                }
+                holder.rollback();
+                assertThat(call.get(5, TimeUnit.SECONDS)).isEqualTo(204);
+            }
+        }
+    }
+
+    private static void lockRow(Connection connection, String sql, long id) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setLong(1, id);
+            statement.executeQuery().close();
+        }
     }
 
     @Test
