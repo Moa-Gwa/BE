@@ -21,6 +21,9 @@ CREATE TABLE admin_applications (
 
 CREATE INDEX idx_admin_applications_status ON admin_applications (status, created_at);
 
+-- 같은 메일로 대기 중인 신청은 하나만 허용(반복 신청 방지). 거절된 뒤 재신청은 가능
+CREATE UNIQUE INDEX uq_admin_applications_pending_email ON admin_applications (email) WHERE status = 'PENDING';
+
 -- 신청 메일이 로그인 아이디가 되므로 신청 email 컬럼 길이에 맞춤
 ALTER TABLE admins ALTER COLUMN login_id TYPE VARCHAR(200);
 

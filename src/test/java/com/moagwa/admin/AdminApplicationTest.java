@@ -154,6 +154,20 @@ class AdminApplicationTest {
     }
 
     @Test
+    void sameEmailCannotSubmitAgainWhilePendingButCanAfterRejection() throws Exception {
+        String email = "again-" + tag + "@example.com";
+        long first = submit(email);
+
+        mvc.perform(post("/api/admin-applications").contentType(MediaType.APPLICATION_JSON)
+                        .content(json(form("AGAIN-" + tag + "@example.com"))))
+                .andExpect(status().isConflict());
+
+        mvc.perform(post("/api/admin/applications/" + first + "/reject").header("Authorization", operator))
+                .andExpect(status().isNoContent());
+        submit(email);
+    }
+
+    @Test
     void onlyOperatorsReviewApplications() throws Exception {
         long id = submit("guard-" + tag + "@example.com");
 
@@ -165,13 +179,16 @@ class AdminApplicationTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    private long submit(String email) throws Exception {
-        Map<String, String> form = Map.of(
+    private Map<String, String> form(String email) {
+        return Map.of(
                 "organizationName", "총학생회-" + tag, "university", "가톨릭대학교", "department", "총학생회",
                 "contactName", "담당자", "email", email, "phone", "010-0000-0000",
                 "channelUrl", "https://example.com/council", "reason", "공지 게시용 계정 신청");
+    }
+
+    private long submit(String email) throws Exception {
         return body(mvc.perform(post("/api/admin-applications").contentType(MediaType.APPLICATION_JSON)
-                        .content(json(form)))
+                        .content(json(form(email))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("PENDING")))
                 .get("id").asLong();

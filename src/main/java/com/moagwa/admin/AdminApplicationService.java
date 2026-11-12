@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -58,7 +60,11 @@ class AdminApplicationService {
     Submitted submit(ApplicationForm form) {
         // 메일 주소가 로그인 아이디가 되므로 신청 시점에 소문자로 통일함
         String email = form.email().toLowerCase(Locale.ROOT);
-        return new Submitted(applications.insert(form, email), "PENDING");
+        try {
+            return new Submitted(applications.insert(form, email), "PENDING");
+        } catch (DuplicateKeyException e) {
+            throw new ApiException(HttpStatus.CONFLICT, "같은 메일로 접수된 신청이 이미 있습니다. 운영진 확인을 기다려 주세요.");
+        }
     }
 
     List<ApplicationView> list(String status) {
@@ -78,10 +84,17 @@ class AdminApplicationService {
             throw new ApiException(HttpStatus.CONFLICT, "같은 이름의 조직이 이미 있습니다.");
         }
 
-        Organization org = organizations.save(verifiedOrganization(a));
-        // 비밀번호는 담당자가 설정 링크로 정하기 전까지 아무도 모르는 값으로 둠
-        Admin admin = admins.save(Admin.awaitingSetup(a.email(), encoder.encode(UUID.randomUUID().toString()),
-                a.contactName(), org));
+        Organization org;
+        Admin admin;
+        try {
+            org = organizations.save(verifiedOrganization(a));
+            // 비밀번호는 담당자가 설정 링크로 정하기 전까지 아무도 모르는 값으로 둠
+            admin = admins.save(Admin.awaitingSetup(a.email(), encoder.encode(UUID.randomUUID().toString()),
+                    a.contactName(), org));
+        } catch (DataIntegrityViolationException e) {
+            // 위 검사 직후 다른 승인이 같은 조직 이름·메일을 먼저 저장한 경우. 트랜잭션은 롤백됨
+            throw new ApiException(HttpStatus.CONFLICT, "같은 조직 이름이나 메일로 방금 승인된 신청이 있습니다.");
+        }
 
         applications.markApproved(id, org.getId(), admin.getId());
         return issueSetupLink(id, a.email());
