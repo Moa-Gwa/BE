@@ -113,6 +113,12 @@ class MarketItemRepository {
                 + "WHERE id = :id AND status = 'ON_SALE'", new MapSqlParameterSource("id", id)) > 0;
     }
 
+    /** 예약 중일 때만 판매 중으로 되돌린다. */
+    void releaseIfReserved(long id) {
+        jdbc.update("UPDATE market_items SET status = 'ON_SALE', updated_at = now() "
+                + "WHERE id = :id AND status = 'RESERVED'", new MapSqlParameterSource("id", id));
+    }
+
     /** 판매자가 자기 물품을 볼 때는 조회수를 올리지 않는다. */
     void increaseViewCount(long id, long viewerId) {
         jdbc.update("UPDATE market_items SET view_count = view_count + 1 WHERE id = :id AND seller_id <> :me",

@@ -12,7 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 구매자의 거래 요청과 판매자의 수락. */
+/** 구매자의 거래 요청·취소와 판매자의 수락·거절. */
 @Service
 @RequiredArgsConstructor
 class TradeRequestService {
@@ -62,8 +62,39 @@ class TradeRequestService {
         if (!items.reserveIfOnSale(request.itemId())) {
             throw new ApiException(HttpStatus.CONFLICT, "판매 중인 물품만 수락할 수 있습니다.");
         }
-        requests.markAccepted(id);
+        requests.updateStatus(id, "ACCEPTED");
         requests.rejectOtherPending(request.itemId(), id);
         chats.openForRequest(id);
+    }
+
+    /** 판매자가 대기 중인 요청을 거절한다. 거절된 구매자는 다시 요청할 수 있다. */
+    @Transactional
+    void reject(long id, long me) {
+        LockedRequest request = requests.lock(id)
+                .orElseThrow(() -> ApiException.notFound("거래 요청을 찾을 수 없습니다."));
+        itemService.requireSeller(request.itemId(), me);
+        if (!"PENDING".equals(request.status())) {
+            throw new ApiException(HttpStatus.CONFLICT, "대기 중인 요청만 거절할 수 있습니다.");
+        }
+        requests.updateStatus(id, "REJECTED");
+    }
+
+    /** 구매자가 자기 요청을 취소한다. 수락된 요청을 취소하면 예약이 풀려 물품이 다시 판매 중이 된다. */
+    @Transactional
+    void cancel(long id, long me) {
+        LockedRequest request = requests.lock(id)
+                .filter(r -> r.buyerId() == me)
+                .orElseThrow(() -> ApiException.notFound("거래 요청을 찾을 수 없습니다."));
+        switch (request.status()) {
+            case "PENDING" -> requests.updateStatus(id, "CANCELED");
+            case "ACCEPTED" -> {
+                if (items.findSaleState(request.itemId()).map(i -> "SOLD".equals(i.status())).orElse(false)) {
+                    throw new ApiException(HttpStatus.CONFLICT, "거래가 끝난 요청은 취소할 수 없습니다.");
+                }
+                requests.updateStatus(id, "CANCELED");
+                items.releaseIfReserved(request.itemId());
+            }
+            default -> throw new ApiException(HttpStatus.CONFLICT, "이미 거절되었거나 취소된 요청입니다.");
+        }
     }
 }

@@ -175,6 +175,73 @@ class MarketApiIntegrationTest {
                 .andExpect(jsonPath("$[0].status").value("ACCEPTED"));
     }
 
+    private long requestTrade(long itemId, User by, int expected) throws Exception {
+        MvcResult r = mvc.perform(post("/api/market/items/" + itemId + "/requests").header("Authorization", token(by))
+                .contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().is(expected)).andReturn();
+        return expected == 201 ? read(r).get("id").asLong() : -1;
+    }
+
+    private void act(String action, long requestId, User by, int expected) throws Exception {
+        mvc.perform(post("/api/market/requests/" + requestId + "/" + action).header("Authorization", token(by)))
+                .andExpect(status().is(expected));
+    }
+
+    private String requestStatus(long requestId) {
+        return jdbc.queryForObject("SELECT status FROM market_requests WHERE id = ?", String.class, requestId);
+    }
+
+    private String itemStatus(long itemId) {
+        return jdbc.queryForObject("SELECT status FROM market_items WHERE id = ?", String.class, itemId);
+    }
+
+    @Test
+    void sellerRejectsAndBuyerCancelsThenRequestsAgain() throws Exception {
+        long id = createItem(seller, "거절 취소 " + tag);
+        long rejected = requestTrade(id, buyer, 201);
+
+        act("reject", rejected, buyer, 403);
+        act("reject", rejected, seller, 204);
+        act("reject", rejected, seller, 409);
+        assertThat(requestStatus(rejected)).isEqualTo("REJECTED");
+
+        assertThat(requestTrade(id, buyer, 201)).isEqualTo(rejected);
+        assertThat(requestStatus(rejected)).isEqualTo("PENDING");
+        requestTrade(id, buyer, 409);
+
+        act("cancel", rejected, seller, 404);
+        act("cancel", rejected, buyer, 204);
+        act("cancel", rejected, buyer, 409);
+        assertThat(requestStatus(rejected)).isEqualTo("CANCELED");
+        assertThat(requestTrade(id, buyer, 201)).isEqualTo(rejected);
+    }
+
+    @Test
+    void cancellingAnAcceptedRequestOrReleasingTheReservationReopensTheItem() throws Exception {
+        long id = createItem(seller, "예약 해제 " + tag);
+        User other = verifiedUser("other-" + tag);
+        long first = requestTrade(id, buyer, 201);
+        long second = requestTrade(id, other, 201);
+
+        act("accept", first, seller, 204);
+        assertThat(requestStatus(second)).isEqualTo("REJECTED");
+        act("cancel", first, buyer, 204);
+        assertThat(itemStatus(id)).isEqualTo("ON_SALE");
+        assertThat(requestStatus(first)).isEqualTo("CANCELED");
+
+        assertThat(requestTrade(id, other, 201)).isEqualTo(second);
+        act("accept", second, seller, 204);
+        mvc.perform(post("/api/market/items/" + id + "/status").header("Authorization", token(seller))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ON_SALE\"}")).andExpect(status().isOk());
+        assertThat(requestStatus(second)).isEqualTo("CANCELED");
+        assertThat(requestTrade(id, other, 201)).isEqualTo(second);
+
+        act("accept", second, seller, 204);
+        mvc.perform(post("/api/market/items/" + id + "/status").header("Authorization", token(seller))
+                .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"SOLD\"}")).andExpect(status().isOk());
+        act("cancel", second, other, 409);
+        assertThat(requestStatus(second)).isEqualTo("ACCEPTED");
+    }
+
     @Test
     void onlySellerCanChangeOrDeleteItem() throws Exception {
         long id = createItem(seller, "남의 물품 " + tag);
