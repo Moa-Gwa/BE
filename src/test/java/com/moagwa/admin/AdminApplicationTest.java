@@ -122,6 +122,16 @@ class AdminApplicationTest {
     }
 
     @Test
+    void applicationWithLongEmailCanBeApproved() throws Exception {
+        String email = "student-council-of-the-college-of-engineering-" + tag + "@example.com";
+        long id = submit(email);
+
+        mvc.perform(post("/api/admin/applications/" + id + "/approve").header("Authorization", operator))
+                .andExpect(status().isOk());
+        assertThat(admins.findByLoginId(email)).isPresent();
+    }
+
+    @Test
     void onlyOperatorsReviewApplications() throws Exception {
         long id = submit("guard-" + tag + "@example.com");
 

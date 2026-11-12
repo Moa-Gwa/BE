@@ -21,5 +21,8 @@ CREATE TABLE admin_applications (
 
 CREATE INDEX idx_admin_applications_status ON admin_applications (status, created_at);
 
+-- 신청 메일이 로그인 아이디가 되므로 신청 email 컬럼 길이에 맞춤
+ALTER TABLE admins ALTER COLUMN login_id TYPE VARCHAR(200);
+
 -- 기존 계정은 활성 상태 유지. 신청으로 발급된 계정은 비밀번호 설정 전까지 false
 ALTER TABLE admins ADD COLUMN activated BOOLEAN NOT NULL DEFAULT TRUE;

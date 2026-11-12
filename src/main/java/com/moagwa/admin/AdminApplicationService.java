@@ -46,7 +46,7 @@ class AdminApplicationService {
 
     AdminApplicationService(AdminApplicationRepository applications, OrganizationRepository organizations,
                             AdminRepository admins, PasswordEncoder encoder, AdminSetupMailer mailer,
-                            @Value("${moagwa.frontend-url:https://localhost:3000}") String frontendUrl) {
+                            @Value("${moagwa.frontend-url}") String frontendUrl) {
         this.applications = applications;
         this.organizations = organizations;
         this.admins = admins;
