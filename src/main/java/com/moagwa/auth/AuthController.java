@@ -65,6 +65,7 @@ class AuthController {
     @Transactional(readOnly = true)
     AdminSession adminLogin(@Valid @RequestBody AdminLogin body, HttpServletResponse response) {
         Admin admin = admins.findByLoginId(body.loginId())
+                .filter(Admin::isActivated)
                 .filter(a -> encoder.matches(body.password(), a.getPasswordHash()))
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."));
         var org = admin.getOrganization();
