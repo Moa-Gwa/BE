@@ -63,7 +63,7 @@ class AdminApplicationService {
         try {
             return new Submitted(applications.insert(form, email), "PENDING");
         } catch (DuplicateKeyException e) {
-            throw new ApiException(HttpStatus.CONFLICT, "같은 메일로 접수된 신청이 이미 있습니다. 운영진 확인을 기다려 주세요.");
+            throw new ApiException(HttpStatus.CONFLICT, "같은 메일로 접수되었거나 승인된 신청이 이미 있습니다.");
         }
     }
 

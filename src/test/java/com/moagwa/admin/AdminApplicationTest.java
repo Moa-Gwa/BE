@@ -154,7 +154,7 @@ class AdminApplicationTest {
     }
 
     @Test
-    void sameEmailCannotSubmitAgainWhilePendingButCanAfterRejection() throws Exception {
+    void sameEmailCannotSubmitAgainUnlessRejected() throws Exception {
         String email = "again-" + tag + "@example.com";
         long first = submit(email);
 
@@ -164,7 +164,14 @@ class AdminApplicationTest {
 
         mvc.perform(post("/api/admin/applications/" + first + "/reject").header("Authorization", operator))
                 .andExpect(status().isNoContent());
-        submit(email);
+        long second = submit(email);
+
+        // 승인된 뒤에도 같은 메일로는 다시 신청할 수 없음
+        mvc.perform(post("/api/admin/applications/" + second + "/approve").header("Authorization", operator))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/admin-applications").contentType(MediaType.APPLICATION_JSON)
+                        .content(json(form(email))))
+                .andExpect(status().isConflict());
     }
 
     @Test
