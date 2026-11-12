@@ -243,6 +243,28 @@ class MarketApiIntegrationTest {
     }
 
     @Test
+    void tradeRequestNotifiesSellerAndAcceptNotifiesBuyer() throws Exception {
+        long id = createItem(seller, "알림 물품 " + tag);
+        long requestId = requestTrade(id, buyer, 201);
+
+        mvc.perform(get("/api/me/notifications").header("Authorization", token(seller)))
+                .andExpect(jsonPath("$.unreadCount").value(1))
+                .andExpect(jsonPath("$.items[0].type").value("TRADE_REQUESTED"))
+                .andExpect(jsonPath("$.items[0].source").value("MARKET"))
+                .andExpect(jsonPath("$.items[0].noticeId").value(id))
+                .andExpect(jsonPath("$.items[0].title").value("알림 물품 " + tag))
+                .andExpect(jsonPath("$.items[0].body").value("buyer-" + tag + "님이 거래를 요청했어요."));
+        mvc.perform(get("/api/me/notifications").header("Authorization", token(buyer)))
+                .andExpect(jsonPath("$.unreadCount").value(0));
+
+        act("accept", requestId, seller, 204);
+        mvc.perform(get("/api/me/notifications").header("Authorization", token(buyer)))
+                .andExpect(jsonPath("$.unreadCount").value(1))
+                .andExpect(jsonPath("$.items[0].type").value("TRADE_ACCEPTED"))
+                .andExpect(jsonPath("$.items[0].noticeId").value(id));
+    }
+
+    @Test
     void onlySellerCanChangeOrDeleteItem() throws Exception {
         long id = createItem(seller, "남의 물품 " + tag);
         Map<String, Object> body = Map.of("title", "바꿈", "price", 1, "category", "BOOK", "imageUrls", List.of("/uploads/i.png"));

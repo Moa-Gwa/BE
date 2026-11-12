@@ -14,8 +14,8 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Creates in-app notifications for students whose interests match a notice. Push delivery (FCM) is a later
- * step and will consume the same rows.
+ * Creates in-app notifications for students whose interests match a notice, and for the two sides of a
+ * second-hand trade. Push delivery (FCM) consumes the same rows.
  */
 @Service
 @RequiredArgsConstructor
@@ -53,6 +53,20 @@ public class NotificationService {
                   JOIN organizations o ON o.id = :org
                   LEFT JOIN notification_settings ns ON ns.user_id = u.id
                  WHERE """ + MATCH.formatted(categoryMatch) + " AND " + settingCheck, p, "MANUAL", noticeId, title);
+    }
+
+    /**
+     * 거래 당사자 한 명에게 알림을 만들고 커밋 후 푸시함. 호출자 트랜잭션 안에서 실행됨
+     * source는 MARKET, notice_id 자리에는 물품 id를 저장해 알림을 누르면 물품 화면으로 이동함
+     */
+    @Transactional
+    public void notifyTrade(long userId, String type, long itemId, String title, String body) {
+        jdbc.update("""
+                INSERT INTO notifications (user_id, type, source, notice_id, title, body)
+                VALUES (:user, :type, 'MARKET', :item, :title, :body)""",
+                new MapSqlParameterSource().addValue("user", userId).addValue("type", type)
+                        .addValue("item", itemId).addValue("title", title).addValue("body", body));
+        events.publishEvent(new PushRequested(List.of(userId), title, body, "/life/items/" + itemId));
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

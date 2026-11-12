@@ -6,6 +6,8 @@ import com.moagwa.market.MarketDto.RequestCreated;
 import com.moagwa.market.MarketDto.RequestView;
 import com.moagwa.market.MarketItemRepository.SaleState;
 import com.moagwa.market.TradeRequestRepository.LockedRequest;
+import com.moagwa.market.TradeRequestRepository.Parties;
+import com.moagwa.notification.NotificationService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -23,6 +25,7 @@ class TradeRequestService {
     private final MarketItemRepository items;
     private final MarketItemService itemService;
     private final ChatService chats;
+    private final NotificationService notifications;
 
     @Transactional
     RequestCreated create(long itemId, String message, long me) {
@@ -36,6 +39,9 @@ class TradeRequestService {
         }
         long id = requests.insert(itemId, me, message == null ? null : message.trim())
                 .orElseThrow(() -> new ApiException(HttpStatus.CONFLICT, "이미 거래를 요청했습니다."));
+        Parties p = requests.findParties(id);
+        notifications.notifyTrade(p.sellerId(), "TRADE_REQUESTED", p.itemId(), p.itemTitle(),
+                p.buyerNickname() + "님이 거래를 요청했어요.");
         return new RequestCreated(id, "PENDING");
     }
 
@@ -65,6 +71,9 @@ class TradeRequestService {
         requests.updateStatus(id, "ACCEPTED");
         requests.rejectOtherPending(request.itemId(), id);
         chats.openForRequest(id);
+        Parties p = requests.findParties(id);
+        notifications.notifyTrade(p.buyerId(), "TRADE_ACCEPTED", p.itemId(), p.itemTitle(),
+                "판매자가 거래 요청을 수락했어요. 채팅에서 약속을 정해 보세요.");
     }
 
     /** 판매자가 대기 중인 요청을 거절한다. 거절된 구매자는 다시 요청할 수 있다. */
