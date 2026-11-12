@@ -1,0 +1,140 @@
+package com.moagwa.admin;
+
+import com.moagwa.admin.AdminApplicationDto.ApplicationForm;
+import com.moagwa.admin.AdminApplicationDto.ApplicationView;
+import com.moagwa.admin.AdminApplicationDto.Approved;
+import com.moagwa.admin.AdminApplicationDto.PasswordSetup;
+import com.moagwa.admin.AdminApplicationDto.SetupStatus;
+import com.moagwa.admin.AdminApplicationDto.Submitted;
+import com.moagwa.admin.AdminApplicationRepository.Application;
+import com.moagwa.common.exception.ApiException;
+import com.moagwa.organization.Organization;
+import com.moagwa.organization.OrganizationRepository;
+import com.moagwa.organization.OrganizationType;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * 단체 관리자 계정 발급 흐름.
+ * 신청(누구나) → 운영자가 사실 확인 후 승인 → 담당자가 메일 링크로 비밀번호 설정 → 로그인 가능.
+ */
+@Service
+class AdminApplicationService {
+
+    private static final Duration SETUP_LINK_TTL = Duration.ofHours(1);
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private final AdminApplicationRepository applications;
+    private final OrganizationRepository organizations;
+    private final AdminRepository admins;
+    private final PasswordEncoder encoder;
+    private final AdminSetupMailer mailer;
+    private final String frontendUrl;
+
+    AdminApplicationService(AdminApplicationRepository applications, OrganizationRepository organizations,
+                            AdminRepository admins, PasswordEncoder encoder, AdminSetupMailer mailer,
+                            @Value("${moagwa.frontend-url:https://localhost:3000}") String frontendUrl) {
+        this.applications = applications;
+        this.organizations = organizations;
+        this.admins = admins;
+        this.encoder = encoder;
+        this.mailer = mailer;
+        this.frontendUrl = frontendUrl;
+    }
+
+    Submitted submit(ApplicationForm form) {
+        // 메일 주소가 로그인 아이디가 되므로 신청 시점에 소문자로 통일함
+        String email = form.email().toLowerCase(Locale.ROOT);
+        return new Submitted(applications.insert(form, email), "PENDING");
+    }
+
+    List<ApplicationView> list(String status) {
+        return applications.findByStatus(status);
+    }
+
+    @Transactional
+    Approved approve(long id) {
+        Application a = applications.lock(id).orElseThrow(() -> ApiException.notFound("신청을 찾을 수 없습니다."));
+        if (!a.pending()) {
+            throw new ApiException(HttpStatus.CONFLICT, "이미 처리된 신청입니다.");
+        }
+        if (admins.findByLoginId(a.email()).isPresent()) {
+            throw new ApiException(HttpStatus.CONFLICT, "해당 메일로 이미 관리자 계정이 있습니다.");
+        }
+        if (organizations.findByName(a.organizationName()).isPresent()) {
+            throw new ApiException(HttpStatus.CONFLICT, "같은 이름의 조직이 이미 있습니다.");
+        }
+
+        Organization org = organizations.save(verifiedOrganization(a));
+        // 비밀번호는 담당자가 설정 링크로 정하기 전까지 아무도 모르는 값으로 둠
+        Admin admin = admins.save(Admin.awaitingSetup(a.email(), encoder.encode(UUID.randomUUID().toString()),
+                a.contactName(), org));
+
+        String token = newToken();
+        applications.markApproved(id, org.getId(), admin.getId(), sha256(token), Instant.now().plus(SETUP_LINK_TTL));
+
+        String link = frontendUrl + "/admin-setup?token=" + token;
+        boolean mailSent = mailer.send(a.email(), link);
+        return new Approved(mailSent, mailSent ? null : link);
+    }
+
+    @Transactional
+    void reject(long id, String reason) {
+        if (applications.rejectPending(id, reason)) {
+            return;
+        }
+        if (applications.exists(id)) {
+            throw new ApiException(HttpStatus.CONFLICT, "이미 처리된 신청입니다.");
+        }
+        throw ApiException.notFound("신청을 찾을 수 없습니다.");
+    }
+
+    SetupStatus checkSetupLink(String token) {
+        return applications.findSetup(sha256(token))
+                .map(t -> new SetupStatus(t.email(), t.expiresAt().isAfter(Instant.now())))
+                .orElseThrow(() -> ApiException.notFound("유효하지 않은 설정 링크입니다."));
+    }
+
+    @Transactional
+    void setupPassword(PasswordSetup req) {
+        long adminId = applications.consumeSetupToken(sha256(req.token()))
+                .orElseThrow(() -> ApiException.badRequest("설정 링크가 만료되었거나 이미 사용되었습니다."));
+        admins.findById(adminId).orElseThrow().activate(encoder.encode(req.password()));
+    }
+
+    private static Organization verifiedOrganization(Application a) {
+        Organization org = new Organization(a.organizationName(), OrganizationType.STUDENT_GOVERNMENT);
+        org.markVerified();
+        org.updateInfo("대학: " + a.university() + " · " + a.department(), null, a.channelUrl());
+        return org;
+    }
+
+    private static String newToken() {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        return HexFormat.of().formatHex(bytes);
+    }
+
+    /** 설정 토큰은 DB에 해시로만 저장함 */
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+}
