@@ -99,18 +99,6 @@ class MarketItemController {
         requests.accept(id, me(auth));
     }
 
-    @PostMapping("/requests/{id}/reject")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    void reject(@PathVariable long id, Authentication auth) {
-        requests.reject(id, me(auth));
-    }
-
-    @PostMapping("/requests/{id}/cancel")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    void cancel(@PathVariable long id, Authentication auth) {
-        requests.cancel(id, me(auth));
-    }
-
     private static long me(Authentication auth) {
         return CurrentUser.from(auth).id();
     }

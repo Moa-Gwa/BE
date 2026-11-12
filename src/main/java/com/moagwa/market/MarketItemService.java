@@ -23,7 +23,6 @@ class MarketItemService {
     private static final int MY_LIST_LIMIT = 100;
 
     private final MarketItemRepository items;
-    private final TradeRequestRepository requests;
 
     @Transactional(readOnly = true)
     ItemPage search(String category, String status, String query, String sort, int page, int size, long me) {
@@ -76,10 +75,6 @@ class MarketItemService {
         requireSeller(id, me);
         requireIn(STATUSES, status, "판매 상태");
         items.updateStatus(id, status);
-        if (status.equals("ON_SALE")) {
-            // 예약을 풀거나 다시 판매하면 수락했던 요청은 취소되고, 그 구매자도 다시 요청할 수 있음
-            requests.cancelAccepted(id);
-        }
         return detail(id, me);
     }
 

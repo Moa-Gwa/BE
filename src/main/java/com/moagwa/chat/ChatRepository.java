@@ -20,11 +20,8 @@ class ChatRepository {
     private final NamedParameterJdbcTemplate jdbc;
 
     /** 새로 만든 경우 방 id, 이미 있으면 빈 값 */
-    /** 취소 후 다시 수락된 요청은 기존 방을 돌려줌 */
     Optional<Long> createForRequest(long requestId) {
-        return jdbc.queryForList("""
-                INSERT INTO chat_rooms (request_id) VALUES (:id)
-                ON CONFLICT (request_id) DO UPDATE SET request_id = EXCLUDED.request_id RETURNING id""",
+        return jdbc.queryForList("INSERT INTO chat_rooms (request_id) VALUES (:id) ON CONFLICT DO NOTHING RETURNING id",
                 new MapSqlParameterSource("id", requestId), Long.class).stream().findFirst();
     }
 
