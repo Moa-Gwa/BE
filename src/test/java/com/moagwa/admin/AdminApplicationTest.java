@@ -55,7 +55,8 @@ class AdminApplicationTest {
 
     @Test
     void approvedApplicantSetsPasswordOnceAndThenLogsIn() throws Exception {
-        long id = submit("Council-" + tag + "@Example.com");
+        String submittedEmail = "Council-" + tag + "@Example.com";
+        long id = submit(submittedEmail);
         String email = "council-" + tag + "@example.com";
 
         mvc.perform(get("/api/admin/applications").header("Authorization", operator))
@@ -83,6 +84,7 @@ class AdminApplicationTest {
 
         assertThat(activated(email)).isTrue();
         login(email, PASSWORD).andExpect(status().isOk());
+        login(submittedEmail, PASSWORD).andExpect(status().isOk());
         assertThat(jdbc.queryForObject("""
                 SELECT o.is_verified FROM admins a JOIN organizations o ON o.id = a.organization_id
                  WHERE a.login_id = ?""", Boolean.class, email)).isTrue();

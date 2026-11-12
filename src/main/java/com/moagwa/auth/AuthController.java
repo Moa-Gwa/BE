@@ -71,7 +71,9 @@ class AuthController {
     @PostMapping("/admin/auth/login")
     @Transactional(readOnly = true)
     AdminSession adminLogin(@Valid @RequestBody AdminLogin body, HttpServletResponse response) {
+        // 신청으로 발급된 계정은 메일 주소를 소문자로 저장하므로, 정확히 일치하는 아이디가 없으면 소문자로 다시 찾음
         Admin admin = admins.findByLoginId(body.loginId())
+                .or(() -> admins.findByLoginId(body.loginId().toLowerCase(Locale.ROOT)))
                 .filter(Admin::isActivated)
                 .filter(a -> encoder.matches(body.password(), a.getPasswordHash()))
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."));
