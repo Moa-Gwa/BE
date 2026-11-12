@@ -40,7 +40,7 @@ public class NoticeQueryService {
                 blockCodec.fromJson(n.getContentBlocks()), n.isUrgent(), n.getPublishAt(), n.getUpdatedAt(), n.getEventStartAt(), n.getEventEndAt(),
                 n.getDeadlineAt(), n.getLocation(), n.getExternalLink(),
                 status == null ? null : status.name(), n.getViewCount(), n.getBookmarkCount(),
-                isBookmarked(viewerId, "MANUAL", id), null, List.of());
+                isBookmarked(viewerId, "MANUAL", id), null, List.of(), List.of());
     }
 
     @Transactional(readOnly = true)
@@ -67,7 +67,7 @@ public class NoticeQueryService {
                     category == null ? List.of() : List.of(category), crawledImages(id), null, false,
                     published.toInstant(), published.toInstant(), eventStart, eventEnd, deadline, null,
                     rs.getString("url"), status == null ? null : status.name(), rs.getInt("view_count"), 0, false,
-                    rs.getString("date_evidence"), List.of((String[]) rs.getArray("keywords").getArray()));
+                    rs.getString("date_evidence"), List.of((String[]) rs.getArray("keywords").getArray()), crawledAttachments(id));
         });
         if (rows.isEmpty()) {
             throw ApiException.notFound("공지를 찾을 수 없습니다.");
@@ -76,7 +76,7 @@ public class NoticeQueryService {
         return new NoticeDetail(d.source(), d.id(), d.organization(), d.title(), d.description(), d.contentHtml(),
                 d.categories(), d.images(), d.blocks(), d.urgent(), d.publishedAt(), d.updatedAt(), d.eventStartAt(),
                 d.eventEndAt(), d.deadlineAt(), d.location(), d.externalLink(), d.status(), d.viewCount(),
-                d.bookmarkCount(), isBookmarked(viewerId, "CRAWLED", id), d.dateEvidence(), d.keywords());
+                d.bookmarkCount(), isBookmarked(viewerId, "CRAWLED", id), d.dateEvidence(), d.keywords(), d.attachments());
     }
 
     private static Instant instant(Timestamp t) {
@@ -86,6 +86,13 @@ public class NoticeQueryService {
     private List<String> crawledImages(long id) {
         return jdbc.queryForList("SELECT url FROM crawled_notice_images WHERE notice_id = :id ORDER BY sort_order",
                 new MapSqlParameterSource("id", id), String.class);
+    }
+
+    private List<NoticeDetail.Attachment> crawledAttachments(long id) {
+        return jdbc.query(
+                "SELECT file_name, url FROM crawled_notice_attachments WHERE notice_id = :id ORDER BY sort_order",
+                new MapSqlParameterSource("id", id),
+                (rs, i) -> new NoticeDetail.Attachment(rs.getString("file_name"), rs.getString("url")));
     }
 
     /** Count each student once per rolling 24 hours; record and counter commit atomically. */

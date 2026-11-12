@@ -31,5 +31,10 @@ public record NoticeDetail(
         int bookmarkCount,
         boolean bookmarked,
         String dateEvidence,
-        List<String> keywords) {
+        List<String> keywords,
+        List<Attachment> attachments) {
+
+    /** 원문 사이트의 첨부파일. url은 원문 서버의 다운로드 주소 */
+    public record Attachment(String fileName, String url) {
+    }
 }

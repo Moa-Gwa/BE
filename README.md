@@ -278,3 +278,66 @@ CORS_ALLOWED_ORIGINS=http://localhost:3000,https://localhost:3000
 
 변경 후 백엔드를 재시작한다. 프론트의 HTTPS 개발 서버에서는 `NEXT_PUBLIC_API_BASE_URL=`로 설정해
 같은 출처의 `/api` 프록시를 사용한다. 출처 제한과 CSRF 검사는 계속 적용된다.
+
+## 학교 공지 썸네일·첨부파일 수집 (BE #68)
+
+학교 공지 상세 파싱 시 본문 첫 유효 이미지를 `crawled_notices.thumbnail_url`에 저장한다.
+이미지는 본문 HTML에서 그대로 표시하며, 인스타그램 전용 `crawled_notice_images` 갤러리에
+추가하지 않는다. 썸네일 후보는 `data-src`(없으면 `src`)를 공지 원문 URL 기준으로 절대화하고
+다음 이미지는 제외한다.
+
+- HTTP(S)가 아닌 주소, 비어 있는 주소, 현재 컬럼 제한(500자)을 넘는 주소
+- 숨김 요소(`hidden`, `aria-hidden`, `display:none`, `visibility:hidden`) 안의 이미지
+- width/height/data-width/data-height 또는 인라인 px 크기가 32 이하인 이미지
+- 파일 경로에 icon/ico/logo/blank/spacer/transparent/pixel 토큰이 포함된 이미지
+
+크기를 알 수 없는 본문 이미지는 허용한다. 적절한 이미지가 없으면 썸네일은 null이다.
+
+첨부파일은 원문 전체 문서의 `.b-file-box a[href]`에서 파일명과 URL을 읽는다.
+학교·국어국문학과의 실제 CMS 구조에서 이 선택자를 확인했다. 다운로드 URL은
+`?mode=download&articleNo=...&attachNo=...`처럼 확장자가 없어도 수집한다.
+첨부파일은 URL 기준 중복을 제거해 `crawled_notice_attachments`에 순서대로 교체 저장한다.
+사이트별 구조가 다르면 DB의 선택자만 변경한다.
+
+```sql
+UPDATE crawl_sources
+SET attachment_selector = '.downloads a[href]'
+WHERE code = '해당_소스_코드';
+```
+
+상세 API `GET /api/crawled-notices/{id}` 응답에 다음 필드를 추가했다.
+
+```json
+{"attachments":[{"fileName":"신청서.hwpx","url":"https://school.example/notice.do?mode=download&attachNo=1"}]}
+```
+
+첨부가 없거나 직접 등록 공지라면 `attachments: []`를 반환한다.
+피드의 기존 `thumbnail` 필드가 학교 썸네일도 반환하므로 FE는 출처를 구분할 필요가 없다.
+
+### 기존 공지 보완 수집과 재수집
+
+V21 마이그레이션 후 기존 공지는 `media_fetched=false`로 시작한다.
+`crawler.enabled=true`이면 기존 크롤러가 한 회차에 소스당 5건씩 상세 페이지를 다시 가져와
+썸네일·첨부파일을 보완한다. 기본 크롤링 주기는 10분이다. 학교 서버에 요청이 몰리지 않도록
+보완 수집 건수는 새 공지 수집과 별개로 작게 둔다.
+미디어가 없는 정상 공지도 완료 처리하므로 반복해서 요청하지 않는다.
+실패하면 기존 미디어를 보존하고 실패 시각(`media_attempted_at`)을 기록해 하루 뒤에 다시 시도한다.
+실패한 공지가 다음 배치를 막지 않도록 아직 시도하지 않은 공지를 먼저 처리한다. 비활성 인스타그램 소스는 이 경로에 포함되지 않는다.
+보완 수집은 새 공지 알림을 발행하지 않는다.
+
+완료된 학교 공지도 다시 수집해야 한다면 해당 소스만 초기화한 뒤 다음 주기를 기다린다.
+원문 페이지 전체를 다시 요청하므로 저장된 본문 HTML에 첨부 영역이 없어도 수집할 수 있다.
+
+```sql
+UPDATE crawled_notices n
+SET media_fetched = false, media_attempted_at = null
+FROM crawl_sources s
+WHERE n.source_id = s.id AND s.enabled = true AND s.code = 'catholic_notice';
+
+SELECT s.code, count(*) FILTER (WHERE NOT n.media_fetched) AS pending,
+       count(*) FILTER (WHERE n.thumbnail_url IS NOT NULL) AS with_thumbnail
+FROM crawled_notices n JOIN crawl_sources s ON s.id = n.source_id
+WHERE s.enabled = true GROUP BY s.code ORDER BY s.code;
+```
+
+검증: `./mvnw -Dtest=BoardParserTest,CrawlerServiceTest,ApiIntegrationTest test`

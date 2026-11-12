@@ -527,4 +527,26 @@ class ApiIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM notice_view_records WHERE user_id = ?", Integer.class, student.getId())).isZero();
     }
 
+    @Test
+    void schoolMediaIsReturnedInFeedAndDetailAndCanBeAbsent() throws Exception {
+        CrawlSource source = sources.save(new CrawlSource("media-" + tag, council, "https://school.example/notice.do"));
+        CrawledNotice notice = new CrawledNotice(source, "media", "첨부 공지 " + tag, "https://school.example/notice.do?mode=view&articleNo=1", false, Instant.now(), Instant.now());
+        notice.applyContent("<p>본문</p>", "본문");
+        notice.assignBoardMedia("https://school.example/poster.jpg", List.of(
+                new com.moagwa.crawler.domain.CrawledAttachment("신청서.hwpx", "https://school.example/notice.do?mode=download&attachNo=1")));
+        long id = crawled.saveAndFlush(notice).getId();
+        mvc.perform(get("/api/feed").param("q", tag))
+                .andExpect(jsonPath("$.items[0].thumbnail").value("https://school.example/poster.jpg"));
+        mvc.perform(get("/api/crawled-notices/" + id))
+                .andExpect(jsonPath("$.attachments[0].fileName").value("신청서.hwpx"))
+                .andExpect(jsonPath("$.attachments[0].url").value("https://school.example/notice.do?mode=download&attachNo=1"));
+        // Text-only school notices do not gain placeholder thumbnails or files.
+        CrawledNotice plain = new CrawledNotice(source, "plain", "텍스트 공지 " + tag, "https://school.example/plain", false, Instant.now(), Instant.now());
+        plain.applyContent("<p>본문</p>", "본문");
+        plain.assignBoardMedia(null, List.of());
+        long plainId = crawled.saveAndFlush(plain).getId();
+        mvc.perform(get("/api/crawled-notices/" + plainId)).andExpect(jsonPath("$.attachments").isEmpty());
+        mvc.perform(get("/api/feed").param("q", "텍스트 공지 " + tag)).andExpect(jsonPath("$.items[0].thumbnail").isEmpty());
+    }
+
 }

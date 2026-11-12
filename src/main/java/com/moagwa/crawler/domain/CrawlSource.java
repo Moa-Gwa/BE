@@ -50,6 +50,9 @@ public class CrawlSource {
     @Column(name = "body_selector", nullable = false)
     private String bodySelector = ".b-con-box";
 
+    @Column(name = "attachment_selector", nullable = false, length = 500)
+    private String attachmentSelector = ".b-file-box a[href]";
+
     @Column(nullable = false)
     private boolean enabled = true;
 
