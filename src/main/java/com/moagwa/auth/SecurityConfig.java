@@ -49,8 +49,8 @@ class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(a -> a
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/actuator/health", "/api/auth/**", "/api/admin/auth/**",
-                                "/api/stream", "/uploads/**", "/instagram/**").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**",
+                                "/api/auth/**", "/api/admin/auth/**", "/api/stream", "/uploads/**", "/instagram/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/feed/**", "/api/notices/**", "/api/crawled-notices/**",
                                 "/api/organizations/**", "/api/categories", "/api/schedule").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/notices/*/view", "/api/crawled-notices/*/view")

@@ -27,7 +27,7 @@
 먼저 로컬 PostgreSQL을 실행.
 
 ```bash
-docker compose up -d
+docker compose up -d postgres
 # Docker를 사용하지 않는 경우
 scripts/dev-db.sh start
 scripts/run-local.sh
@@ -37,6 +37,20 @@ scripts/run-local.sh
 기본 프로필이 없으므로 로컬 실행 시 `local` 프로필을 반드시 지정. 프로필 없이 실행하면 개발용 로그인, 샘플 데이터, 인증 코드 노출이 꺼짐.
 
 서버 주소: `http://localhost:8080`
+
+### Docker로 서버·프론트·DB 한 번에 실행
+
+FE 저장소를 `../FE`에 `develop` 브랜치로 받아 둬야 함(FE Dockerfile은 Moa-Gwa/FE#52부터 포함). 로컬에서 띄운 서버·프론트(8080, 3000)는 먼저 종료.
+
+```bash
+docker compose up --build
+# 카카오·FCM·토스 키까지 프론트 빌드에 넣는 경우
+docker compose --env-file ../FE/.env.local up --build
+```
+
+- 서버는 `local` 프로필로 실행되고 비밀값은 `.env`에서 실행 시점에 주입함. 이미지에는 넣지 않음
+- 프론트의 `NEXT_PUBLIC_*` 값은 빌드할 때 번들에 들어가므로 빌드 인자로 넘김
+- 헬스체크: `/actuator/health/liveness`, `/actuator/health/readiness`
 
 ## API 문서(Swagger)
 

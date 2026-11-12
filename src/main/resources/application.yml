@@ -80,6 +80,13 @@ crawler:
     post-details-script: ${INSTAGRAM_POST_DETAILS_SCRIPT:instagram-browser-scraper/src/collect-post-details.js}
     command-timeout: ${INSTAGRAM_CRAWLER_COMMAND_TIMEOUT:PT3M}
 
+# 쿠버네티스 프로브용 /actuator/health/liveness, /actuator/health/readiness
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
 # API 문서(Swagger)는 기본 비활성화, local 프로필에서만 켬
 springdoc:
   api-docs:
