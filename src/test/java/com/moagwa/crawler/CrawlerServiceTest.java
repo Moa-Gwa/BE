@@ -139,6 +139,11 @@ class CrawlerServiceTest {
         doReturn(load("board-media-detail.html", LIST_URL)).when(fetcher).fetch(anyString());
         doReturn(load("catholic-list.html", LIST_URL)).when(fetcher).fetch(LIST_URL);
         crawler.crawlSource(sources.findById(source.getId()).orElseThrow());
+        // 학교 서버 부담을 줄이려고 한 회차에 소스당 5건까지만 보완함
+        assertThat(mine()).filteredOn(CrawledNotice::isMediaFetched).hasSize(Math.min(5, mine().size()));
+        for (int run = 0; run < 10 && !mine().stream().allMatch(CrawledNotice::isMediaFetched); run++) {
+            crawler.crawlSource(sources.findById(source.getId()).orElseThrow());
+        }
         assertThat(mine()).allMatch(CrawledNotice::isMediaFetched);
         assertThat(jdbc.queryForObject("SELECT thumbnail_url FROM crawled_notices WHERE id = ?", String.class, id)).endsWith("/images/poster.jpg");
         assertThat(details.crawled(id, null).attachments()).hasSize(2);
@@ -147,12 +152,27 @@ class CrawlerServiceTest {
         assertThat(details.crawled(id, null).attachments()).hasSize(2);
         assertThat(events.stream(CrawledNoticeCreatedEvent.class)).isEmpty();
 
-        // A failed refresh must not erase attachments that have already been collected.
+        // 재수집에 실패해도 이미 모은 첨부파일은 유지됨
         jdbc.update("UPDATE crawled_notices SET media_fetched = false WHERE id = ?", id);
         doThrow(new IOException("timeout")).when(fetcher).fetch(anyString());
         doReturn(load("catholic-list.html", LIST_URL)).when(fetcher).fetch(LIST_URL);
         crawler.crawlSource(sources.findById(source.getId()).orElseThrow());
         assertThat(details.crawled(id, null).attachments()).hasSize(2);
+
+        // 실패한 공지는 하루가 지나기 전에는 다시 요청하지 않음
+        doReturn(load("board-media-detail.html", LIST_URL)).when(fetcher).fetch(anyString());
+        doReturn(load("catholic-list.html", LIST_URL)).when(fetcher).fetch(LIST_URL);
+        crawler.crawlSource(sources.findById(source.getId()).orElseThrow());
+        assertThat(mediaFetched(id)).isFalse();
+
+        jdbc.update("UPDATE crawled_notices SET media_attempted_at = now() - interval '25 hours' WHERE id = ?", id);
+        crawler.crawlSource(sources.findById(source.getId()).orElseThrow());
+        assertThat(mediaFetched(id)).isTrue();
+    }
+
+    private boolean mediaFetched(long id) {
+        return Boolean.TRUE.equals(
+                jdbc.queryForObject("SELECT media_fetched FROM crawled_notices WHERE id = ?", Boolean.class, id));
     }
 
     @Test

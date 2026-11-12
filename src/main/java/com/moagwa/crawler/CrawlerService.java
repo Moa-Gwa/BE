@@ -10,6 +10,7 @@ import com.moagwa.crawler.parser.DetailContent;
 import com.moagwa.crawler.parser.ListItem;
 import java.io.IOException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -37,6 +38,10 @@ public class CrawlerService {
     private final CrawlPersistence persistence;
     private final PageFetcher fetcher;
     private final BoardParser parser;
+    /** 기존 공지 미디어 보완 수집: 소스당 한 회차에 처리할 공지 수와 실패 후 재시도 간격 */
+    private static final int MEDIA_BACKFILL_BATCH = 5;
+    private static final Duration MEDIA_RETRY_AFTER = Duration.ofDays(1);
+
     private final ApplicationEventPublisher events;
     private final CrawlerProperties properties;
     private final Clock clock;
@@ -139,12 +144,18 @@ public class CrawlerService {
         }
     }
 
-    /** mediaFetched distinguishes a text-only notice from an older notice not yet inspected. */
+    /**
+     * 썸네일·첨부파일을 아직 확인하지 않은 기존 공지를 조금씩 보완 수집함.
+     * 학교 서버에 요청이 몰리지 않도록 회차당 적은 수만 처리하고, 실패한 공지는 하루 뒤에 다시 시도함
+     */
     private void retryMissingMedia(CrawlSource source) {
-        for (CrawledNotice notice : persistence.findMissingMedia(source.getId(), properties.detailRetryBatch())) {
-            fetchDetail(source, notice.getUrl())
-                    .ifPresentOrElse(content -> persistence.applyContent(notice.getId(), content),
-                            () -> persistence.recordMediaAttempt(notice.getId()));
+        Instant now = clock.instant();
+        List<CrawledNotice> pending = persistence.findMissingMedia(
+                source.getId(), now.minus(MEDIA_RETRY_AFTER), MEDIA_BACKFILL_BATCH);
+        for (CrawledNotice notice : pending) {
+            fetchDetail(source, notice.getUrl()).ifPresentOrElse(
+                    content -> persistence.applyContent(notice.getId(), content),
+                    () -> persistence.recordMediaAttempt(notice.getId(), now));
         }
     }
 

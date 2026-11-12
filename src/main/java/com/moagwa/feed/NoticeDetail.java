@@ -1,7 +1,6 @@
 package com.moagwa.feed;
 
 import com.moagwa.notice.NoticeBlock;
-import com.moagwa.crawler.domain.CrawledAttachment;
 import java.time.Instant;
 import java.util.List;
 
@@ -33,5 +32,9 @@ public record NoticeDetail(
         boolean bookmarked,
         String dateEvidence,
         List<String> keywords,
-        List<CrawledAttachment> attachments) {
+        List<Attachment> attachments) {
+
+    /** 원문 사이트의 첨부파일. url은 원문 서버의 다운로드 주소 */
+    public record Attachment(String fileName, String url) {
+    }
 }

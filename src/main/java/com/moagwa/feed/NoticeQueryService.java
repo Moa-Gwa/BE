@@ -1,7 +1,6 @@
 package com.moagwa.feed;
 
 import com.moagwa.common.exception.ApiException;
-import com.moagwa.crawler.domain.CrawledAttachment;
 import com.moagwa.notice.Category;
 import com.moagwa.notice.DisplayStatus;
 import com.moagwa.notice.Notice;
@@ -89,9 +88,11 @@ public class NoticeQueryService {
                 new MapSqlParameterSource("id", id), String.class);
     }
 
-    private List<CrawledAttachment> crawledAttachments(long id) {
-        return jdbc.query("SELECT file_name, url FROM crawled_notice_attachments WHERE notice_id = :id ORDER BY sort_order",
-                new MapSqlParameterSource("id", id), (rs, i) -> new CrawledAttachment(rs.getString("file_name"), rs.getString("url")));
+    private List<NoticeDetail.Attachment> crawledAttachments(long id) {
+        return jdbc.query(
+                "SELECT file_name, url FROM crawled_notice_attachments WHERE notice_id = :id ORDER BY sort_order",
+                new MapSqlParameterSource("id", id),
+                (rs, i) -> new NoticeDetail.Attachment(rs.getString("file_name"), rs.getString("url")));
     }
 
     /** Count each student once per rolling 24 hours; record and counter commit atomically. */

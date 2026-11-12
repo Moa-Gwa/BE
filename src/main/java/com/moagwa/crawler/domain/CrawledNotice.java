@@ -85,10 +85,14 @@ public class CrawledNotice {
     @Column(name = "media_fetched", nullable = false)
     private boolean mediaFetched;
 
+    /** 마지막으로 미디어 수집에 실패한 시각. 수집에 성공하면 null */
     @Column(name = "media_attempted_at")
     private Instant mediaAttemptedAt;
 
-    public void markMediaAttempted() { this.mediaAttemptedAt = Instant.now(); }
+    /** 상세 페이지를 못 가져와 미디어 확인에 실패한 시각. 재시도 간격 계산에 사용 */
+    public void markMediaAttempted(Instant attemptedAt) {
+        this.mediaAttemptedAt = attemptedAt;
+    }
 
     /** Board images stay in the HTML body; Instagram keeps its separate gallery. */
     public void assignBoardMedia(String thumbnailUrl, List<CrawledAttachment> files) {
@@ -96,7 +100,7 @@ public class CrawledNotice {
         this.attachments.clear();
         this.attachments.addAll(files);
         this.mediaFetched = true;
-        markMediaAttempted();
+        this.mediaAttemptedAt = null;
     }
 
     public CrawledNotice(CrawlSource source, String externalId, String title, String url,

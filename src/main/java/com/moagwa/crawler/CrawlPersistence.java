@@ -36,8 +36,8 @@ class CrawlPersistence {
     }
 
     @Transactional(readOnly = true)
-    public List<CrawledNotice> findMissingMedia(Long sourceId, int limit) {
-        return notices.findMissingMedia(sourceId, PageRequest.of(0, limit));
+    public List<CrawledNotice> findMissingMedia(Long sourceId, Instant retryBefore, int limit) {
+        return notices.findMissingMedia(sourceId, retryBefore, PageRequest.of(0, limit));
     }
 
     /** Throws DataIntegrityViolationException if (source, externalId) already exists. */
@@ -64,8 +64,8 @@ class CrawlPersistence {
     }
 
     @Transactional
-    public void recordMediaAttempt(Long noticeId) {
-        notices.findById(noticeId).ifPresent(CrawledNotice::markMediaAttempted);
+    public void recordMediaAttempt(Long noticeId, Instant attemptedAt) {
+        notices.findById(noticeId).ifPresent(n -> n.markMediaAttempted(attemptedAt));
     }
 
     @Transactional
