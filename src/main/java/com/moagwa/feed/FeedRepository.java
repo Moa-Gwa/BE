@@ -127,8 +127,7 @@ class FeedRepository {
                         ON b.user_id = CAST(:viewer AS bigint) AND b.source = f.source AND b.notice_id = f.id
                      WHERE f.source = 'MANUAL' OR b.user_id IS NOT NULL
                 )
-                SELECT s.*, (SELECT p.memo FROM personal_schedules p
-                    WHERE s.source = 'PERSONAL' AND p.id = s.id AND p.user_id = CAST(:viewer AS bigint)) AS memo FROM (
+                SELECT * FROM (
                     SELECT 'EVENT' AS type, i.event_start_at AS at, i.source, i.id, i.title,
                            i.organization_name, i.location, i.bookmarked
                       FROM items i WHERE i.event_start_at IS NOT NULL
@@ -136,9 +135,6 @@ class FeedRepository {
                     SELECT 'DEADLINE', i.deadline_at, i.source, i.id, i.title, i.organization_name, i.location,
                            i.bookmarked
                       FROM items i WHERE i.deadline_at IS NOT NULL
-                    UNION ALL
-                    SELECT 'PERSONAL', starts_at, 'PERSONAL', id, title, '내 일정', location, false
-                      FROM personal_schedules WHERE user_id = CAST(:viewer AS bigint)
                 ) s
                 WHERE s.at >= :from AND s.at < :to
                 ORDER BY s.at
@@ -150,7 +146,7 @@ class FeedRepository {
         return jdbc.query(sql, p, (rs, i) -> new ScheduleEntry(
                 rs.getString("type"), rs.getTimestamp("at").toInstant(), rs.getString("source"),
                 rs.getLong("id"), rs.getString("title"), rs.getString("organization_name"),
-                rs.getString("location"), rs.getBoolean("bookmarked"), rs.getString("memo")));
+                rs.getString("location"), rs.getBoolean("bookmarked")));
     }
 
     private static String orderBy(String sort) {
