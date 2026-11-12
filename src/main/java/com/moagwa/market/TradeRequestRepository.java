@@ -57,7 +57,12 @@ class TradeRequestRepository {
                 new MapSqlParameterSource().addValue("buyer", buyerId).addValue("limit", limit), VIEW_MAPPER);
     }
 
-    /** 호출하는 트랜잭션이 끝날 때까지 요청 행을 잠근다. */
+    Optional<Long> findItemId(long id) {
+        return jdbc.queryForList("SELECT item_id FROM market_requests WHERE id = :id",
+                new MapSqlParameterSource("id", id), Long.class).stream().findFirst();
+    }
+
+    /** 호출하는 트랜잭션이 끝날 때까지 요청 행을 잠근다. 물품 행을 먼저 잠근 뒤 호출한다. */
     Optional<LockedRequest> lock(long id) {
         return jdbc.query("SELECT item_id, buyer_id, status FROM market_requests WHERE id = :id FOR UPDATE",
                 new MapSqlParameterSource("id", id),

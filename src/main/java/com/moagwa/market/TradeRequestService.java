@@ -14,7 +14,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 구매자의 거래 요청·취소와 판매자의 수락·거절. */
+/**
+ * 구매자의 거래 요청·취소와 판매자의 수락·거절.
+ * 물품 상태와 요청 상태를 함께 바꾸는 흐름은 모두 물품 → 요청 순서로 잠가 동시 처리 시 교착과 상태 불일치를 막음
+ */
 @Service
 @RequiredArgsConstructor
 class TradeRequestService {
@@ -29,7 +32,7 @@ class TradeRequestService {
 
     @Transactional
     RequestCreated create(long itemId, String message, long me) {
-        SaleState item = items.findSaleState(itemId)
+        SaleState item = items.lockSaleState(itemId)
                 .orElseThrow(() -> ApiException.notFound("물품을 찾을 수 없습니다."));
         if (item.sellerId() == me) {
             throw ApiException.badRequest("내 물품에는 거래를 요청할 수 없습니다.");
@@ -59,8 +62,7 @@ class TradeRequestService {
     /** 판매자가 요청 하나를 수락한다. 물품은 예약 중이 되고 나머지 대기 요청은 거절된다. */
     @Transactional
     void accept(long id, long me) {
-        LockedRequest request = requests.lock(id)
-                .orElseThrow(() -> ApiException.notFound("거래 요청을 찾을 수 없습니다."));
+        LockedRequest request = lockWithItem(id);
         itemService.requireSeller(request.itemId(), me);
         if (!"PENDING".equals(request.status())) {
             throw new ApiException(HttpStatus.CONFLICT, "이미 처리된 요청입니다.");
@@ -91,9 +93,10 @@ class TradeRequestService {
     /** 구매자가 자기 요청을 취소한다. 수락된 요청을 취소하면 예약이 풀려 물품이 다시 판매 중이 된다. */
     @Transactional
     void cancel(long id, long me) {
-        LockedRequest request = requests.lock(id)
-                .filter(r -> r.buyerId() == me)
-                .orElseThrow(() -> ApiException.notFound("거래 요청을 찾을 수 없습니다."));
+        LockedRequest request = lockWithItem(id);
+        if (request.buyerId() != me) {
+            throw ApiException.notFound("거래 요청을 찾을 수 없습니다.");
+        }
         switch (request.status()) {
             case "PENDING" -> requests.updateStatus(id, "CANCELED");
             case "ACCEPTED" -> {
@@ -105,5 +108,12 @@ class TradeRequestService {
             }
             default -> throw new ApiException(HttpStatus.CONFLICT, "이미 거절되었거나 취소된 요청입니다.");
         }
+    }
+
+    private LockedRequest lockWithItem(long id) {
+        long itemId = requests.findItemId(id)
+                .orElseThrow(() -> ApiException.notFound("거래 요청을 찾을 수 없습니다."));
+        items.lockSaleState(itemId);
+        return requests.lock(id).orElseThrow(() -> ApiException.notFound("거래 요청을 찾을 수 없습니다."));
     }
 }

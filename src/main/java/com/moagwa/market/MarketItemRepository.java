@@ -84,6 +84,13 @@ class MarketItemRepository {
                 (rs, n) -> new SaleState(rs.getLong("seller_id"), rs.getString("status"))).stream().findFirst();
     }
 
+    /** 호출하는 트랜잭션이 끝날 때까지 물품 행을 잠근다. 거래 흐름은 물품 → 요청 순서로 잠근다. */
+    Optional<SaleState> lockSaleState(long id) {
+        return jdbc.query("SELECT seller_id, status FROM market_items WHERE id = :id FOR UPDATE",
+                new MapSqlParameterSource("id", id),
+                (rs, n) -> new SaleState(rs.getLong("seller_id"), rs.getString("status"))).stream().findFirst();
+    }
+
     long insert(long sellerId, ItemFields fields) {
         return jdbc.queryForObject("""
                 INSERT INTO market_items (seller_id, title, description, price, category, trade_place)

@@ -30,7 +30,7 @@ public class ChatService {
     private final ApplicationEventPublisher events;
     private final SimpUserRegistry connectedUsers;
 
-    /** 거래 요청 수락 시 판매자·구매자 1:1 방 생성, 열린 화면에 목록 갱신 알림 */
+    /** 거래 요청 수락 시 판매자·구매자 1:1 방 생성(다시 수락이면 기존 방), 열린 화면에 목록 갱신 알림 */
     public void openForRequest(long requestId) {
         chats.createForRequest(requestId).ifPresent(roomId ->
                 events.publishEvent(new ChatEvents.RoomOpened(chats.members(roomId), roomId)));
