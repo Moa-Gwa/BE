@@ -341,3 +341,13 @@ WHERE s.enabled = true GROUP BY s.code ORDER BY s.code;
 ```
 
 검증: `./mvnw -Dtest=BoardParserTest,CrawlerServiceTest,ApiIntegrationTest test`
+
+## 이미지 블록의 사진 설명
+
+IMAGES 블록에 선택 `captions: string[]` 필드를 추가했다. 기존 `images: string[]`와 같은 순서이며
+입력 시 개수가 일치해야 한다. 설명은 사진당 최대 300자이고 빈 문자열은 허용한다.
+필드가 생략된 예전 요청은 빈 설명으로 채우고, 기존 저장 JSON의 captions 누락도 허용한다.
+생성·수정·복제와 학생 상세 응답에 설명이 유지된다. TEXT 블록은 계속 일반 텍스트다.
+기존 JSON 컬럼을 사용하므로 추가 DB 마이그레이션은 없다.
+
+검증: `./mvnw -Dtest=ApiIntegrationTest test` (캡션 저장/수정/복제, 이전 JSON, 길이·개수 검증).

@@ -27,6 +27,7 @@ import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -547,6 +548,61 @@ class ApiIntegrationTest {
         long plainId = crawled.saveAndFlush(plain).getId();
         mvc.perform(get("/api/crawled-notices/" + plainId)).andExpect(jsonPath("$.attachments").isEmpty());
         mvc.perform(get("/api/feed").param("q", "텍스트 공지 " + tag)).andExpect(jsonPath("$.items[0].thumbnail").isEmpty());
+    }
+
+    @Test
+    void imageCaptionsSurviveCreateEditAndDuplicate() throws Exception {
+        Map<String, Object> group = captioned("CAROUSEL",
+                List.of("/uploads/a.png", "/uploads/b.png"), List.of("첫 사진 설명", "두 번째 사진 설명"));
+        long id = createNotice(admin, Map.of("title", "캡션 " + tag, "blocks", List.of(text("본문"), group)))
+                .get("id").asLong();
+
+        mvc.perform(get("/api/notices/" + id))
+                .andExpect(jsonPath("$.blocks[1].captions[0]").value("첫 사진 설명"));
+
+        // 사진 순서를 바꾸면 설명도 같은 순서로 저장됨
+        Map<String, Object> reordered = captioned("STACK",
+                List.of("/uploads/b.png", "/uploads/a.png"), List.of("두 번째 사진 설명", "첫 사진 설명"));
+        Map<String, Object> edit = Map.of("title", "캡션 수정", "categoryIds", List.of(1),
+                "blocks", List.of(text("본문"), reordered));
+        mvc.perform(put("/api/admin/notices/" + id)
+                        .header("Authorization", adminToken(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(edit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocks[1].captions[0]").value("두 번째 사진 설명"));
+
+        mvc.perform(post("/api/admin/notices/" + id + "/duplicate")
+                        .header("Authorization", adminToken(admin)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.blocks[1].captions[1]").value("첫 사진 설명"));
+
+        // 캡션 필드가 생기기 전에 저장된 JSON도 그대로 조회됨
+        jdbc.update("UPDATE notices SET content_blocks = ? WHERE id = ?", """
+                [{"type":"TEXT","text":"예전 글"},
+                 {"type":"IMAGES","images":["/uploads/a.png"],"layout":"STACK"}]""", id);
+        mvc.perform(get("/api/notices/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.blocks[1].images[0]").value("/uploads/a.png"));
+    }
+
+    @Test
+    void captionsRejectMismatchedCountsNullItemsAndExcessLength() throws Exception {
+        List<String> oneImage = List.of("/uploads/a.png");
+        assertBlocksRejected(List.of(text("본문"), captioned("STACK", oneImage, List.of("하나", "둘"))));
+        assertBlocksRejected(List.of(text("본문"), captioned("STACK", oneImage, List.of("x".repeat(301)))));
+        assertBlocksRejected(List.of(text("본문"), captioned("STACK", oneImage, Collections.singletonList(null))));
+
+        // 설명 없이 보내면 사진마다 빈 설명으로 채워짐
+        long id = createNotice(admin, Map.of("title", "설명 없음",
+                "blocks", List.of(text("본문"), images("STACK", "/uploads/a.png"))))
+                .get("id").asLong();
+        mvc.perform(get("/api/notices/" + id))
+                .andExpect(jsonPath("$.blocks[1].captions[0]").value(""));
+    }
+
+    private static Map<String, Object> captioned(String layout, List<String> urls, List<String> captions) {
+        return Map.of("type", "IMAGES", "layout", layout, "images", urls, "captions", captions);
     }
 
 }
