@@ -17,6 +17,7 @@ import com.moagwa.organization.OrganizationRepository;
 import com.moagwa.realtime.NoticeChangedEvent;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -25,6 +26,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+
 
 /** All operations are scoped to the organization in the caller's token; ids from the client are never trusted. */
 @Service
@@ -204,11 +207,17 @@ public class AdminNoticeService {
         for (BlockInput b : input) {
             if (NoticeBlock.TEXT.equals(b.type())) {
                 if (b.text() != null && !b.text().isBlank()) {
-                    out.add(new NoticeBlock(NoticeBlock.TEXT, b.text(), null, null));
+                    out.add(new NoticeBlock(NoticeBlock.TEXT, b.text(), null, null, null));
                 }
             } else if (b.images() != null && !b.images().isEmpty()) {
+                if (b.captions() != null && b.captions().size() != b.images().size()) {
+                    throw ApiException.badRequest("이미지와 사진 설명 개수가 일치해야 합니다.");
+                }
+                List<String> captions = b.captions() == null
+                        ? Collections.nCopies(b.images().size(), "")
+                        : b.captions().stream().map(String::trim).toList();
                 out.add(new NoticeBlock(NoticeBlock.IMAGES, null, List.copyOf(b.images()),
-                        b.layout() == null ? NoticeBlock.CAROUSEL : b.layout()));
+                        b.layout() == null ? NoticeBlock.CAROUSEL : b.layout(), captions));
             }
         }
         return out;
