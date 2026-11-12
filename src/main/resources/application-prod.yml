@@ -19,6 +19,8 @@ spring:
       mail.smtp.writetimeout: 5000
 
 moagwa:
+  # 운영 프론트엔드 주소(예: https://moagwa.kr). 비어 있으면 설정 메일 링크가 깨지므로 기본값 없이 필수로 둔다.
+  frontend-url: ${FRONTEND_URL}
   mail:
     # 보내는 사람 주소. SES에서 인증한 도메인 또는 주소여야 한다(예: "모아과 <no-reply@moagwa.kr>").
     from: ${MAIL_FROM}

@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface AdminRepository extends JpaRepository<Admin, Long> {
 
     Optional<Admin> findByLoginId(String loginId);
+
+    boolean existsByLoginIdIgnoreCase(String loginId);
 }

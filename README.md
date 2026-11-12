@@ -99,6 +99,7 @@ scripts/run-local.sh
 | `KAKAO_CLIENT_SECRET` | 카카오 선택적 보안 키 |
 | `GOOGLE_ALLOWED_EMAIL_DOMAIN` | Google 로그인 허용 이메일 도메인 |
 | `CORS_ALLOWED_ORIGINS` | 프론트엔드 허용 주소 |
+| `FRONTEND_URL` | 메일 링크에 넣을 프론트엔드 주소(운영 필수, 로컬 기본 `https://localhost:3000`) |
 | `DB_URL` | 운영 PostgreSQL 주소 |
 | `DB_USERNAME` | 운영 DB 사용자 |
 | `DB_PASSWORD` | 운영 DB 비밀번호 |
