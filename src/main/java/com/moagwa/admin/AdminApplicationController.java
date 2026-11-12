@@ -46,6 +46,11 @@ class AdminApplicationController {
         return service.approve(id);
     }
 
+    @PostMapping("/admin/applications/{id}/resend-setup")
+    Approved resendSetupLink(@PathVariable long id) {
+        return service.resendSetupLink(id);
+    }
+
     @PostMapping("/admin/applications/{id}/reject")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void reject(@PathVariable long id, @Valid @RequestBody(required = false) Rejection body) {

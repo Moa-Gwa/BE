@@ -91,7 +91,7 @@ class AdminApplicationTest {
     }
 
     @Test
-    void expiredSetupLinkIsReportedInvalidAndCannotBeUsed() throws Exception {
+    void expiredSetupLinkCannotBeUsedUntilOperatorResendsIt() throws Exception {
         long id = submit("late-" + tag + "@example.com");
         String token = body(mvc.perform(post("/api/admin/applications/" + id + "/approve")
                 .header("Authorization", operator))).get("setupLink").asText().replaceAll(".*token=", "");
@@ -103,6 +103,20 @@ class AdminApplicationTest {
                 .andExpect(jsonPath("$.valid").value(false));
         setup(token, PASSWORD).andExpect(status().isBadRequest());
         login("late-" + tag + "@example.com", PASSWORD).andExpect(status().isUnauthorized());
+
+        // 운영자가 링크를 다시 보내면 새 링크로 설정 가능
+        String newToken = body(mvc.perform(post("/api/admin/applications/" + id + "/resend-setup")
+                .header("Authorization", operator)).andExpect(status().isOk()))
+                .get("setupLink").asText().replaceAll(".*token=", "");
+        setup(newToken, PASSWORD).andExpect(status().isNoContent());
+        login("late-" + tag + "@example.com", PASSWORD).andExpect(status().isOk());
+
+        // 비밀번호를 정한 계정과 승인 전 신청에는 다시 보낼 수 없음
+        mvc.perform(post("/api/admin/applications/" + id + "/resend-setup").header("Authorization", operator))
+                .andExpect(status().isConflict());
+        long pending = submit("wait-" + tag + "@example.com");
+        mvc.perform(post("/api/admin/applications/" + pending + "/resend-setup").header("Authorization", operator))
+                .andExpect(status().isConflict());
     }
 
     @Test

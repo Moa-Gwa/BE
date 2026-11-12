@@ -83,11 +83,29 @@ class AdminApplicationService {
         Admin admin = admins.save(Admin.awaitingSetup(a.email(), encoder.encode(UUID.randomUUID().toString()),
                 a.contactName(), org));
 
-        String token = newToken();
-        applications.markApproved(id, org.getId(), admin.getId(), sha256(token), Instant.now().plus(SETUP_LINK_TTL));
+        applications.markApproved(id, org.getId(), admin.getId());
+        return issueSetupLink(id, a.email());
+    }
 
+    /** 설정 링크가 만료됐거나 메일을 못 받은 경우, 아직 비밀번호를 정하지 않은 계정에 링크를 새로 보냄 */
+    @Transactional
+    Approved resendSetupLink(long id) {
+        Application a = applications.lock(id).orElseThrow(() -> ApiException.notFound("신청을 찾을 수 없습니다."));
+        if (!a.approved()) {
+            throw new ApiException(HttpStatus.CONFLICT, "승인된 신청에만 설정 링크를 다시 보낼 수 있습니다.");
+        }
+        if (admins.findById(a.adminId()).orElseThrow().isActivated()) {
+            throw new ApiException(HttpStatus.CONFLICT, "이미 비밀번호를 설정한 계정입니다.");
+        }
+        return issueSetupLink(id, a.email());
+    }
+
+    /** 새 토큰을 저장하면 이전 링크는 더 이상 쓸 수 없음 */
+    private Approved issueSetupLink(long applicationId, String email) {
+        String token = newToken();
+        applications.saveSetupToken(applicationId, sha256(token), Instant.now().plus(SETUP_LINK_TTL));
         String link = frontendUrl + "/admin-setup?token=" + token;
-        boolean mailSent = mailer.send(a.email(), link);
+        boolean mailSent = mailer.send(email, link);
         return new Approved(mailSent, mailSent ? null : link);
     }
 

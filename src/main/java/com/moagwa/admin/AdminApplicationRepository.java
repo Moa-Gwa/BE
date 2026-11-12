@@ -18,10 +18,14 @@ class AdminApplicationRepository {
 
     /** 승인 처리에 필요한 신청 내용 */
     record Application(long id, String status, String organizationName, String university, String department,
-                       String contactName, String email, String channelUrl) {
+                       String contactName, String email, String channelUrl, Long adminId) {
 
         boolean pending() {
             return "PENDING".equals(status);
+        }
+
+        boolean approved() {
+            return "APPROVED".equals(status);
         }
     }
 
@@ -66,14 +70,16 @@ class AdminApplicationRepository {
     /** 승인이 동시에 두 번 처리되지 않도록 행을 잠근 채 읽음 */
     Optional<Application> lock(long id) {
         return jdbc.query("""
-                SELECT id, status, organization_name, university, department, contact_name, email, channel_url
+                SELECT id, status, organization_name, university, department, contact_name, email, channel_url,
+                       admin_id
                   FROM admin_applications
                  WHERE id = :id
                    FOR UPDATE""",
                 new MapSqlParameterSource("id", id),
                 (rs, i) -> new Application(rs.getLong("id"), rs.getString("status"),
                         rs.getString("organization_name"), rs.getString("university"), rs.getString("department"),
-                        rs.getString("contact_name"), rs.getString("email"), rs.getString("channel_url")))
+                        rs.getString("contact_name"), rs.getString("email"), rs.getString("channel_url"),
+                        rs.getObject("admin_id", Long.class)))
                 .stream().findFirst();
     }
 
@@ -83,16 +89,21 @@ class AdminApplicationRepository {
                 new MapSqlParameterSource("id", id), Boolean.class));
     }
 
-    void markApproved(long id, long organizationId, long adminId, String setupTokenHash, Instant setupExpiresAt) {
+    void markApproved(long id, long organizationId, long adminId) {
         jdbc.update("""
                 UPDATE admin_applications
-                   SET status = 'APPROVED', organization_id = :org, admin_id = :admin,
-                       setup_token_hash = :hash, setup_expires_at = :expires, resolved_at = now()
+                   SET status = 'APPROVED', organization_id = :org, admin_id = :admin, resolved_at = now()
+                 WHERE id = :id""",
+                new MapSqlParameterSource().addValue("id", id).addValue("org", organizationId).addValue("admin", adminId));
+    }
+
+    void saveSetupToken(long id, String setupTokenHash, Instant setupExpiresAt) {
+        jdbc.update("""
+                UPDATE admin_applications
+                   SET setup_token_hash = :hash, setup_expires_at = :expires
                  WHERE id = :id""",
                 new MapSqlParameterSource()
                         .addValue("id", id)
-                        .addValue("org", organizationId)
-                        .addValue("admin", adminId)
                         .addValue("hash", setupTokenHash)
                         .addValue("expires", Timestamp.from(setupExpiresAt)));
     }
