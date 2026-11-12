@@ -243,6 +243,29 @@ class MarketApiIntegrationTest {
     }
 
     @Test
+    void invalidTransitionsKeepRequestAndItemStatus() throws Exception {
+        long id = createItem(seller, "잘못된 전이 " + tag);
+        User other = verifiedUser("other-" + tag);
+        long accepted = requestTrade(id, buyer, 201);
+        long rejected = requestTrade(id, other, 201);
+        act("reject", rejected, seller, 204);
+        act("accept", accepted, seller, 204);
+
+        act("reject", accepted, seller, 409);
+        assertThat(requestStatus(accepted)).isEqualTo("ACCEPTED");
+        assertThat(itemStatus(id)).isEqualTo("RESERVED");
+
+        requestTrade(id, other, 409);
+        assertThat(requestStatus(rejected)).isEqualTo("REJECTED");
+
+        act("cancel", accepted, other, 404);
+        act("cancel", 0, buyer, 404);
+        act("reject", 0, seller, 404);
+        act("accept", rejected, seller, 409);
+        assertThat(requestStatus(accepted)).isEqualTo("ACCEPTED");
+    }
+
+    @Test
     void tradeRequestNotifiesSellerAndAcceptNotifiesBuyer() throws Exception {
         long id = createItem(seller, "알림 물품 " + tag);
         long requestId = requestTrade(id, buyer, 201);

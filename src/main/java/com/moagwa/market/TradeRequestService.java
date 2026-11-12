@@ -81,8 +81,7 @@ class TradeRequestService {
     /** 판매자가 대기 중인 요청을 거절한다. 거절된 구매자는 다시 요청할 수 있다. */
     @Transactional
     void reject(long id, long me) {
-        LockedRequest request = requests.lock(id)
-                .orElseThrow(() -> ApiException.notFound("거래 요청을 찾을 수 없습니다."));
+        LockedRequest request = lockWithItem(id);
         itemService.requireSeller(request.itemId(), me);
         if (!"PENDING".equals(request.status())) {
             throw new ApiException(HttpStatus.CONFLICT, "대기 중인 요청만 거절할 수 있습니다.");
