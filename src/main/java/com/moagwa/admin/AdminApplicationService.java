@@ -71,7 +71,7 @@ class AdminApplicationService {
         if (!a.pending()) {
             throw new ApiException(HttpStatus.CONFLICT, "이미 처리된 신청입니다.");
         }
-        if (admins.findByLoginId(a.email()).isPresent()) {
+        if (admins.existsByLoginIdIgnoreCase(a.email())) {
             throw new ApiException(HttpStatus.CONFLICT, "해당 메일로 이미 관리자 계정이 있습니다.");
         }
         if (organizations.findByName(a.organizationName()).isPresent()) {

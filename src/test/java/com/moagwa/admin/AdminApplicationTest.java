@@ -131,6 +131,12 @@ class AdminApplicationTest {
                 .andExpect(status().isConflict());
         mvc.perform(post("/api/admin/applications/" + id + "/approve").header("Authorization", operator))
                 .andExpect(status().isConflict());
+        // 대소문자만 다른 메일의 계정이 이미 있으면 승인 불가
+        admins.save(new Admin("Dup-" + tag + "@Example.com", "hash", "기존", organizations.findAll().get(0)));
+        long dup = submit("dup-" + tag + "@example.com");
+        mvc.perform(post("/api/admin/applications/" + dup + "/approve").header("Authorization", operator))
+                .andExpect(status().isConflict());
+
         mvc.perform(post("/api/admin/applications/0/approve").header("Authorization", operator))
                 .andExpect(status().isNotFound());
         mvc.perform(post("/api/admin/applications/0/reject").header("Authorization", operator))
