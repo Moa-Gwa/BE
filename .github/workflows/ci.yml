@@ -64,6 +64,39 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  deploy:
+    name: 배포 태그 갱신
+    needs: image
+    # main 푸시만 운영 배포, develop은 이미지 빌드까지
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # 같은 저장소의 배포 커밋이 순서대로 쌓이도록 한 번에 하나만 실행
+    concurrency: deploy-tag
+    steps:
+      - name: infra 저장소 체크아웃
+        uses: actions/checkout@v4
+        with:
+          repository: Moa-Gwa/infra
+          # infra 쓰기 전용 deploy key. GITHUB_TOKEN은 이 저장소에만 쓸 수 있음
+          ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
+      - name: 이미지 태그 변경·푸시
+        env:
+          IMAGE: ghcr.io/moa-gwa/be
+          SOURCE: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+        run: |
+          TAG="sha-${GITHUB_SHA::7}"
+          FILE=k8s/overlays/prod/kustomization.yaml
+          # images 항목에서 이 이미지 이름 다음 줄의 newTag 교체
+          sed -i "\#name: ${IMAGE}\$#{n;s#newTag: .*#newTag: ${TAG}#;}" "$FILE"
+          grep -A1 "name: ${IMAGE}$" "$FILE" | grep -q "newTag: ${TAG}$" || { echo "::error::${FILE}에서 ${IMAGE} 태그를 찾지 못함"; exit 1; }
+          git diff --quiet && { echo "이미 ${TAG} 배포 상태"; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git commit -qam "chore(deploy): 서버 이미지 ${TAG} 배포" -m "$SOURCE"
+          # 다른 저장소 CI가 먼저 푸시했으면 최신 커밋 위로 옮겨 다시 시도
+          for i in 1 2 3; do git push && exit 0; git pull --rebase; done
+          exit 1
+
   pr-title:
     name: PR 제목 검사
     if: github.event_name == 'pull_request'
