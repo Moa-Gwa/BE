@@ -17,14 +17,22 @@
 - `feature` → `develop` 병합은 **Squash merge**, `release`/`hotfix` → `main` 병합은 **Merge commit**(이력 보존)을 쓴다.
 - `main`에 병합한 직후 태그를 만들고 `develop`에도 되돌려 병합한다.
 
+릴리스 기준
+- BE·FE가 짝을 이루는 기능 하나가 양쪽 모두 `develop`에 병합되면 릴리스한다. 한쪽만 배포하면 동작하지 않는 변경은 반드시 같은 버전으로 낸다.
+- 짝을 이루는 릴리스는 BE를 먼저 `main`에 병합하고, 헬스체크가 UP인지 확인한 뒤 FE를 병합한다(DB 마이그레이션 선적용).
+- 문구·스타일 같은 작은 수정은 따로 릴리스하지 않고 다음 기능 릴리스에 포함한다.
+- 운영 장애 수정은 `hotfix/vX.Y.Z`로 바로 `main`에 낸다.
+- 버전은 새 기능이 있으면 `v0.X.0`, 수정만 있으면 `v0.X.Y`로 올린다. BE·FE의 같은 릴리스는 같은 버전을 쓴다.
+- 배포는 롤링 업데이트라 잠시 이전·새 버전이 같은 DB를 쓴다. 마이그레이션은 추가 위주로 작성하고, 컬럼 삭제·이름 변경은 다음 릴리스로 나눈다.
+
 ```bash
 # 기능 개발
 git switch develop && git pull
 git switch -c feature/12-crawler-port
 
 # 릴리스
-git switch develop && git pull && git switch -c release/v0.1.0
-# 병합 후: main에서 git tag -a v0.1.0 -m "v0.1.0" && git push origin v0.1.0
+git switch develop && git pull && git switch -c release/v0.3.0
+# 병합 후: main에서 git tag -a v0.3.0 -m "v0.3.0" && git push origin v0.3.0
 ```
 
 ## 커밋 컨벤션 (Conventional Commits)

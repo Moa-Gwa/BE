@@ -1,6 +1,7 @@
 package com.moagwa.user;
 
 import com.moagwa.common.exception.ApiException;
+import com.moagwa.reminder.ReminderService;
 import com.moagwa.user.MeDto.NotificationList;
 import com.moagwa.user.MeDto.NotificationSettings;
 import com.moagwa.user.MeDto.Profile;
@@ -18,6 +19,7 @@ class MeService {
 
     private final UserRepository users;
     private final MeRepository me;
+    private final ReminderService reminders;
 
     @Transactional(readOnly = true)
     Profile profile(long userId) {
@@ -58,6 +60,7 @@ class MeService {
     @Transactional
     void unbookmark(long userId, String source, long noticeId) {
         String s = source(source);
+        reminders.remove(userId, s, noticeId);
         if (me.deleteBookmark(userId, s, noticeId) && s.equals("MANUAL")) {
             me.addNoticeBookmarkCount(noticeId, -1);
         }
