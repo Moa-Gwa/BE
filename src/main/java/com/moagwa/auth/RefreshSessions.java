@@ -77,8 +77,11 @@ public class RefreshSessions {
         String next = randomToken();
         jdbc.update("INSERT INTO refresh_sessions VALUES (?, ?, ?, ?)", hash(next), session.id(), session.role(),
                 java.sql.Timestamp.from(session.expiresAt()));
+        Duration remaining = Duration.between(Instant.now(), session.expiresAt());
+        // Max-Age는 초 단위이므로 1초 미만이면 쿠키를 발급하지 않고 교체도 롤백한다.
+        if (remaining.compareTo(Duration.ofSeconds(1)) < 0) throw unauthorized();
         cookies.issue(response, access);
-        cookies.issueRefresh(response, next, Duration.between(Instant.now(), session.expiresAt()));
+        cookies.issueRefresh(response, next, remaining);
     }
 
     public void revoke(HttpServletRequest request) {

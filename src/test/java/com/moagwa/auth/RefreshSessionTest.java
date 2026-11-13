@@ -50,6 +50,19 @@ class RefreshSessionTest {
                 .andExpect(status().isNoContent());
     }
 
+    @Test void lessThanOneSecondRemainingDoesNotIssueCookiesOrRotate() throws Exception {
+        var token = start();
+        String hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                .digest(token.getValue().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        jdbc.update("UPDATE refresh_sessions SET expires_at = clock_timestamp() + INTERVAL '900 milliseconds' "
+                + "WHERE token_hash = ?", hash);
+        var response = mvc.perform(post("/api/auth/refresh").cookie(token).header("X-Requested-With", "fetch"))
+                .andExpect(status().isUnauthorized()).andReturn().getResponse();
+        assertThat(response.getHeaders("Set-Cookie")).isEmpty();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM refresh_sessions WHERE token_hash = ?",
+                Integer.class, hash)).isOne();
+    }
+
     @Test void logoutRevokesRefreshToken() throws Exception {
         var token = start();
         mvc.perform(post("/api/auth/logout").cookie(token).header("X-Requested-With", "fetch"))
