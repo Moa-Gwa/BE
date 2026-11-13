@@ -23,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RefreshSessions {
     static final Duration TTL = Duration.ofDays(30);
+    private static final String INSERT_SQL =
+            "INSERT INTO refresh_sessions (token_hash, principal_id, role, expires_at) VALUES (?, ?, ?, ?)";
     private final JdbcTemplate jdbc;
     private final JwtService jwt;
     private final AuthCookies cookies;
@@ -46,7 +48,7 @@ public class RefreshSessions {
         var claims = jwt.decoder().decode(accessToken);
         String token = randomToken();
         jdbc.update("DELETE FROM refresh_sessions WHERE expires_at <= now()");
-        jdbc.update("INSERT INTO refresh_sessions VALUES (?, ?, ?, ?)", hash(token),
+        jdbc.update(INSERT_SQL, hash(token),
                 Long.parseLong(claims.getSubject()), claims.getClaimAsString("role"),
                 java.sql.Timestamp.from(Instant.now().plus(TTL)));
         cookies.issue(response, accessToken);
@@ -74,12 +76,12 @@ public class RefreshSessions {
                     .anyMatch(admin.getLoginId()::equals);
             access = jwt.issueAdmin(admin.getId(), admin.getOrganization().getId(), operator);
         }
-        String next = randomToken();
-        jdbc.update("INSERT INTO refresh_sessions VALUES (?, ?, ?, ?)", hash(next), session.id(), session.role(),
-                java.sql.Timestamp.from(session.expiresAt()));
         Duration remaining = Duration.between(Instant.now(), session.expiresAt());
-        // Max-Age는 초 단위이므로 1초 미만이면 쿠키를 발급하지 않고 교체도 롤백한다.
+        // Max-Age는 초 단위이므로 1초 미만이면 쿠키를 발급하지 않고 소비도 롤백함
         if (remaining.compareTo(Duration.ofSeconds(1)) < 0) throw unauthorized();
+        String next = randomToken();
+        jdbc.update(INSERT_SQL, hash(next), session.id(), session.role(),
+                java.sql.Timestamp.from(session.expiresAt()));
         cookies.issue(response, access);
         cookies.issueRefresh(response, next, remaining);
     }

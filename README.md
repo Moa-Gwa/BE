@@ -354,10 +354,10 @@ IMAGES 블록에 선택 `captions: string[]` 필드를 추가했다. 기존 `ima
 
 ### 로그인 유지
 
-- Access Token은 `moagwa_session` HttpOnly 쿠키에 보관하며 15분간 유효합니다.
-- Refresh Token은 `moagwa_refresh` HttpOnly 쿠키에 보관하고 DB에는 SHA-256 해시만 저장합니다.
-- `POST /api/auth/refresh`는 Refresh Token을 한 번 소비하고 교체합니다. 만료는 최초 로그인부터 30일이며 갱신으로 연장하지 않습니다.
-- 갱신 시 학생 인증 상태 및 관리자 활성화·권한을 DB에서 다시 확인합니다.
-- 갱신·로그아웃에도 쿠키 인증 CSRF 헤더 `X-Requested-With`가 필요합니다.
-- 로그아웃 시 해당 Refresh Token과 두 쿠키를 폐기합니다. 이미 발급된 Access Token은 최대 15분까지 유효합니다.
-- V23 마이그레이션을 적용한 BE를 FE보다 먼저 배포합니다. 기존 로그인은 Refresh Token이 없어 만료 시 한 번 재로그인이 필요합니다.
+- Access Token은 `moagwa_session` HttpOnly 쿠키에 보관, 15분간 유효함.
+- Refresh Token은 `moagwa_refresh` HttpOnly 쿠키에 보관, DB에는 SHA-256 해시만 저장함.
+- `POST /api/auth/refresh`는 Refresh Token을 한 번 소비하고 교체함. 만료는 최초 로그인부터 30일이며 갱신으로 연장되지 않음.
+- 갱신 시 학생 인증 상태와 관리자 활성화·권한을 DB에서 다시 확인함.
+- 갱신·로그아웃에도 쿠키 인증 CSRF 헤더 `X-Requested-With`가 필요함.
+- 로그아웃 시 해당 Refresh Token과 두 쿠키를 폐기함. 이미 발급된 Access Token은 최대 15분까지 유효함.
+- 자동 갱신은 FE가 담당하므로 BE와 FE를 같은 릴리스로 배포함. 기존 로그인은 Refresh Token이 없어 만료 시 한 번 재로그인이 필요함.
