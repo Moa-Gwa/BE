@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 public class JwtService {
 
     /** 액세스 토큰과 세션 쿠키의 유효 기간. */
-    public static final Duration TTL = Duration.ofHours(12);
+    public static final Duration TTL = Duration.ofMinutes(15);
 
     private final SecretKey key;
     private final JwtEncoder encoder;

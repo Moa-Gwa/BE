@@ -25,7 +25,7 @@ class CookieCsrfFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         boolean unsafe = !SAFE_METHODS.contains(request.getMethod());
-        boolean cookieAuth = request.getHeader(HttpHeaders.AUTHORIZATION) == null && AuthCookies.read(request) != null;
+        boolean cookieAuth = request.getHeader(HttpHeaders.AUTHORIZATION) == null && (AuthCookies.read(request) != null || AuthCookies.read(request, AuthCookies.REFRESH_NAME) != null);
         String marker = request.getHeader(HEADER);
         if (unsafe && cookieAuth && (marker == null || marker.isBlank())) {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
