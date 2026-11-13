@@ -18,6 +18,7 @@ class MeService {
 
     private final UserRepository users;
     private final MeRepository me;
+    private final com.moagwa.reminder.ReminderService reminders;
 
     @Transactional(readOnly = true)
     Profile profile(long userId) {
@@ -58,6 +59,7 @@ class MeService {
     @Transactional
     void unbookmark(long userId, String source, long noticeId) {
         String s = source(source);
+        reminders.remove(userId, s, noticeId);
         if (me.deleteBookmark(userId, s, noticeId) && s.equals("MANUAL")) {
             me.addNoticeBookmarkCount(noticeId, -1);
         }
