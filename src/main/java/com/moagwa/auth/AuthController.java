@@ -10,6 +10,7 @@ import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
@@ -46,6 +47,7 @@ class AuthController {
     private final PasswordEncoder encoder;
     private final JwtService jwt;
     private final AuthCookies cookies;
+    private final RefreshSessions refreshSessions;
     private final ObjectProvider<FirebaseAuth> firebaseAuth;
 
     @Value("${moagwa.kakao.client-id:}")
@@ -69,7 +71,7 @@ class AuthController {
     private List<String> operatorLoginIds;
 
     @PostMapping("/admin/auth/login")
-    @Transactional(readOnly = true)
+    @Transactional
     AdminSession adminLogin(@Valid @RequestBody AdminLogin body, HttpServletResponse response) {
         // 신청으로 발급된 계정은 메일 주소를 소문자로 저장하므로, 정확히 일치하는 아이디가 없으면 소문자로 다시 찾음
         Admin admin = admins.findByLoginId(body.loginId())
@@ -80,7 +82,7 @@ class AuthController {
         var org = admin.getOrganization();
         boolean operator = admin.isOperator() || operatorLoginIds.stream().map(String::trim)
                 .anyMatch(admin.getLoginId()::equals);
-        cookies.issue(response, jwt.issueAdmin(admin.getId(), org.getId(), operator));
+        refreshSessions.start(jwt.issueAdmin(admin.getId(), org.getId(), operator), response);
         return new AdminSession(admin.getName(), new OrgInfo(org.getId(), org.getName(), org.getType().name()),
                 operator);
     }
@@ -150,8 +152,15 @@ class AuthController {
 
     /** 세션 쿠키를 지운다. 로그인하지 않은 상태에서 불러도 204. */
     @PostMapping("/auth/logout")
-    ResponseEntity<Void> logout(HttpServletResponse response) {
+    ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
+        refreshSessions.revoke(request);
         cookies.clear(response);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/auth/refresh")
+    ResponseEntity<Void> refresh(HttpServletRequest request, HttpServletResponse response) {
+        refreshSessions.refresh(request, response);
         return ResponseEntity.noContent().build();
     }
 
@@ -177,14 +186,14 @@ class AuthController {
 
         private final UserRepository users;
         private final JwtService jwt;
-        private final AuthCookies cookies;
+        private final RefreshSessions refreshSessions;
 
         @PostMapping("/dev-student")
         @Transactional
         StudentSession devStudent(@Valid @RequestBody DevLogin body, HttpServletResponse response) {
             User user = users.findByAuthProviderAndProviderUserId("DEV", body.nickname())
                     .orElseGet(() -> users.save(new User("DEV", body.nickname(), body.nickname())));
-            cookies.issue(response, jwt.issueStudent(user.getId(), user.isVerified()));
+            refreshSessions.start(jwt.issueStudent(user.getId(), user.isVerified()), response);
             return StudentSession.of(user);
         }
     }
@@ -195,7 +204,7 @@ class AuthController {
     }
 
     private StudentSession session(User user, HttpServletResponse response) {
-        cookies.issue(response, jwt.issueStudent(user.getId(), user.isVerified()));
+        refreshSessions.start(jwt.issueStudent(user.getId(), user.isVerified()), response);
         return StudentSession.of(user);
     }
 

@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 public class AuthCookies {
 
     public static final String NAME = "moagwa_session";
+    public static final String REFRESH_NAME = "moagwa_refresh";
 
     private final boolean secure;
     private final String sameSite;
@@ -34,18 +35,27 @@ public class AuthCookies {
         response.addHeader(HttpHeaders.SET_COOKIE, build(token, JwtService.TTL).toString());
     }
 
+    public void issueRefresh(HttpServletResponse response, String token, Duration ttl) {
+        response.addHeader(HttpHeaders.SET_COOKIE, build(REFRESH_NAME, token, ttl).toString());
+    }
+
     public void clear(HttpServletResponse response) {
         response.addHeader(HttpHeaders.SET_COOKIE, build("", Duration.ZERO).toString());
+        issueRefresh(response, "", Duration.ZERO);
     }
 
     /** 요청에 담긴 세션 쿠키 값. 없으면 null. */
     static String read(HttpServletRequest request) {
+        return read(request, NAME);
+    }
+
+    static String read(HttpServletRequest request, String name) {
         Cookie[] cookies = request.getCookies();
         if (cookies == null) {
             return null;
         }
         for (Cookie cookie : cookies) {
-            if (NAME.equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
+            if (name.equals(cookie.getName()) && cookie.getValue() != null && !cookie.getValue().isBlank()) {
                 return cookie.getValue();
             }
         }
@@ -53,7 +63,11 @@ public class AuthCookies {
     }
 
     private ResponseCookie build(String value, Duration maxAge) {
-        ResponseCookie.ResponseCookieBuilder cookie = ResponseCookie.from(NAME, value)
+        return build(NAME, value, maxAge);
+    }
+
+    private ResponseCookie build(String name, String value, Duration maxAge) {
+        ResponseCookie.ResponseCookieBuilder cookie = ResponseCookie.from(name, value)
                 .httpOnly(true)
                 .secure(secure)
                 .sameSite(sameSite)

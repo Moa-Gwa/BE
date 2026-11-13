@@ -52,7 +52,7 @@ class AuthCookieTest {
                 .andExpect(jsonPath("$.token").doesNotExist())
                 .andReturn().getResponse().getHeader(HttpHeaders.SET_COOKIE);
         assertThat(setCookie).startsWith(AuthCookies.NAME + "=")
-                .contains("HttpOnly", "Secure", "SameSite=Lax", "Path=/", "Max-Age=43200");
+                .contains("HttpOnly", "Secure", "SameSite=Lax", "Path=/", "Max-Age=900");
         String value = setCookie.substring(AuthCookies.NAME.length() + 1, setCookie.indexOf(';'));
         return new Cookie(AuthCookies.NAME, value);
     }
