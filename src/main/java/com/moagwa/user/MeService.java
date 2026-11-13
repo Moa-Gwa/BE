@@ -1,6 +1,7 @@
 package com.moagwa.user;
 
 import com.moagwa.common.exception.ApiException;
+import com.moagwa.reminder.ReminderService;
 import com.moagwa.user.MeDto.NotificationList;
 import com.moagwa.user.MeDto.NotificationSettings;
 import com.moagwa.user.MeDto.Profile;
@@ -18,7 +19,7 @@ class MeService {
 
     private final UserRepository users;
     private final MeRepository me;
-    private final com.moagwa.reminder.ReminderService reminders;
+    private final ReminderService reminders;
 
     @Transactional(readOnly = true)
     Profile profile(long userId) {

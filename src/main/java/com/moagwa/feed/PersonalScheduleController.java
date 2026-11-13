@@ -2,6 +2,7 @@ package com.moagwa.feed;
 
 import com.moagwa.auth.CurrentUser;
 import com.moagwa.common.exception.ApiException;
+import com.moagwa.reminder.ReminderService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -13,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -20,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 class PersonalScheduleController {
     private final NamedParameterJdbcTemplate jdbc;
-    private final com.moagwa.reminder.ReminderService reminders;
+    private final ReminderService reminders;
 
     record Input(@NotBlank @Size(max = 100) String title, @NotNull Instant at,
                  @Size(max = 200) String location, @Size(max = 1000) String memo, Boolean reminderEnabled) {}
@@ -32,7 +34,7 @@ class PersonalScheduleController {
                 .addValue("location", input.location()).addValue("memo", input.memo());
     }
 
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     Map<String, Long> create(@Valid @RequestBody Input input, Authentication auth) {
@@ -44,7 +46,7 @@ class PersonalScheduleController {
         return Map.of("id", id);
     }
 
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     @PutMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void update(@PathVariable long id, @Valid @RequestBody Input input, Authentication auth) {
@@ -56,7 +58,7 @@ class PersonalScheduleController {
         if (input.reminderEnabled() != null) reminders.set(CurrentUser.from(auth).id(), "PERSONAL", id, input.reminderEnabled());
     }
 
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(@PathVariable long id, Authentication auth) {
