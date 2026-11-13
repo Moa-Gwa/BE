@@ -62,6 +62,15 @@ class PushTokenController {
         if (!Boolean.TRUE.equals(registered)) {
             throw ApiException.notFound("이 기기는 알림 받을 기기로 등록되어 있지 않습니다. 알림을 다시 켜 주세요.");
         }
+        // 단일 UPSERT로 여러 서버·동시 요청에서도 사용자당 1분에 한 번만 발송을 시도함.
+        int claimed = jdbc.update("""
+                INSERT INTO push_test_attempts (user_id, attempted_at) VALUES (:u, clock_timestamp())
+                ON CONFLICT (user_id) DO UPDATE SET attempted_at = clock_timestamp()
+                WHERE push_test_attempts.attempted_at <= clock_timestamp() - INTERVAL '1 minute'
+                """, new MapSqlParameterSource("u", CurrentUser.from(auth).id()));
+        if (claimed == 0) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "테스트 알림은 1분에 한 번만 보낼 수 있습니다.");
+        }
         pushSender.sendTest(req.token());
     }
 
