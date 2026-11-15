@@ -91,6 +91,40 @@ class ReminderTest {
         reminders.sendDue(); assertThat(count()).isZero();
     }
 
+    @Test void eventStartAndDeadlineRespectIndependentSettingsAndDeduplication() throws Exception {
+        long source=jdbc.queryForObject("SELECT min(id) FROM crawl_sources",Long.class);
+        long notice=jdbc.queryForObject("INSERT INTO crawled_notices(source_id,external_id,title,url,published_at,event_start_at,deadline_at) VALUES (?,?, '행사','https://example.test',now(),now()+INTERVAL '50 minutes',now()+INTERVAL '23 hours 50 minutes') RETURNING id",Long.class,source,UUID.randomUUID().toString());
+        jdbc.update("INSERT INTO bookmarks(user_id,source,notice_id) VALUES (?,'CRAWLED',?)",user,notice);
+        reminders.set(user,"CRAWLED",notice,true,ReminderService.Kind.EVENT_START);
+        reminders.set(user,"CRAWLED",notice,true);
+        jdbc.update("UPDATE reminders SET enabled_at=now()-INTERVAL '2 days' WHERE user_id=?",user);
+        jdbc.update("UPDATE event_start_reminders SET enabled_at=now()-INTERVAL '2 days' WHERE user_id=?",user);
+        jdbc.update("INSERT INTO notification_settings(user_id,event_start,deadline_soon) VALUES (?,false,true)",user);
+        reminders.sendDue(); reminders.sendDue(); assertThat(count()).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT body FROM notifications WHERE user_id=?",String.class,user)).contains("마감");
+        jdbc.update("UPDATE notification_settings SET event_start=true,deadline_soon=false WHERE user_id=?",user);
+        reminders.sendDue(); reminders.sendDue(); assertThat(count()).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM notifications WHERE user_id=? AND body LIKE '%1시간%'",Integer.class,user)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM event_start_reminders WHERE user_id=? AND sent_for IS NOT NULL",Integer.class,user)).isEqualTo(1);
+        mvc.perform(get("/api/me/reminders/CRAWLED/"+notice+"?kind=EVENT_START").header("Authorization","Bearer "+jwt.issueStudent(user)))
+          .andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(true));
+    }
+
+    @Test void eventStartDoesNotSendBeforeOneHourOrForLateOptIn() {
+        long source=jdbc.queryForObject("SELECT min(id) FROM crawl_sources",Long.class);
+        long notice=jdbc.queryForObject("INSERT INTO crawled_notices(source_id,external_id,title,url,published_at,event_start_at) VALUES (?,?, '행사','https://example.test',now(),now()+INTERVAL '2 hours') RETURNING id",Long.class,source,UUID.randomUUID().toString());
+        jdbc.update("INSERT INTO bookmarks(user_id,source,notice_id) VALUES (?,'CRAWLED',?)",user,notice);
+        reminders.set(user,"CRAWLED",notice,true,ReminderService.Kind.EVENT_START);
+        jdbc.update("UPDATE reminders SET enabled_at=now()-INTERVAL '2 days' WHERE user_id=?",user);
+        jdbc.update("UPDATE event_start_reminders SET enabled_at=now()-INTERVAL '2 days' WHERE user_id=?",user);
+        reminders.sendDue(); assertThat(count()).isZero();
+        jdbc.update("UPDATE crawled_notices SET event_start_at=now()+INTERVAL '50 minutes' WHERE id=?",notice);
+        jdbc.update("UPDATE event_start_reminders SET enabled_at=now() WHERE user_id=?",user);
+        reminders.sendDue(); assertThat(count()).isZero();
+        assertThatThrownBy(()->reminders.set(user,"PERSONAL",id,true,ReminderService.Kind.EVENT_START))
+          .isInstanceOf(RuntimeException.class);
+    }
+
     @Test void concurrentWorkersDoNotDuplicate() throws Exception {
         enableDue("PERSONAL",id);
         var pool=Executors.newFixedThreadPool(2);
