@@ -307,7 +307,7 @@ class ApiIntegrationTest {
                 "publishAt", Instant.now().plusSeconds(1).toString())).get("id").asLong();
         Thread.sleep(1500);
 
-        assertThat(adminNotices.publishDue()).isGreaterThanOrEqualTo(1);
+        adminNotices.publishDue(); // 스케줄러가 먼저 게시할 수 있어 건수 대신 조회 결과로 확인
         mvc.perform(get("/api/notices/" + id)).andExpect(status().isOk());
     }
 
