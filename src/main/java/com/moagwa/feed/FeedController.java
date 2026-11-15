@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
 class FeedController {
 
     private final FeedRepository feed;
+    private final AcademicCalendar academicCalendar;
+    private final ScheduleColors scheduleColors;
     private final NoticeQueryService notices;
     private final OrganizationRepository organizations;
     private final CategoryRepository categories;
@@ -108,7 +110,10 @@ class FeedController {
         if (to.isBefore(from) || from.plusDays(62).isBefore(to)) {
             throw ApiException.badRequest("조회 기간은 최대 62일입니다.");
         }
-        return feed.schedule(from, to.plusDays(1), CurrentUser.studentIdOrNull(auth));
+        var entries = new java.util.ArrayList<>(feed.schedule(from, to.plusDays(1), CurrentUser.studentIdOrNull(auth)));
+        entries.addAll(academicCalendar.entries(from, to.plusDays(1)));
+        entries.sort(java.util.Comparator.comparing(ScheduleEntry::at));
+        return scheduleColors.apply(CurrentUser.studentIdOrNull(auth), entries);
     }
 
     record CategoryView(long id, String code, String name) {

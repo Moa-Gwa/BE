@@ -44,6 +44,7 @@ import org.springframework.test.web.servlet.MvcResult;
 @SpringBootTest
 @AutoConfigureMockMvc
 class ApiIntegrationTest {
+    @org.springframework.boot.test.mock.mockito.MockBean com.moagwa.feed.AcademicCalendar academicCalendar;
 
     @Autowired MockMvc mvc;
     @Autowired ObjectMapper json;
