@@ -54,6 +54,18 @@ class ScheduleColorTest {
         assertThat(jdbc.queryForObject("SELECT count(*) FROM schedule_colors WHERE user_id=?", Integer.class, user)).isZero();
     }
 
+    @Test void scheduleUpdateWithoutColorPreservesTheExistingOverride() throws Exception {
+        long user = user();
+        var created = mvc.perform(post("/api/me/schedules").header("Authorization", auth(user))
+                .contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isCreated()).andReturn();
+        long id = json.readTree(created.getResponse().getContentAsString()).get("id").asLong();
+        String update = "{\"title\":\"수정 회의\",\"at\":\"2026-12-01T00:00:00Z\",\"endAt\":\"2026-12-02T00:00:00Z\"}";
+        mvc.perform(put("/api/me/schedules/" + id).header("Authorization", auth(user))
+                .contentType(MediaType.APPLICATION_JSON).content(update)).andExpect(status().isNoContent());
+        mvc.perform(get(query).header("Authorization", auth(user))).andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.source == 'PERSONAL')].color", hasItem("#147D56")));
+    }
+
     @Test void academicColorsArePrivateToEachAccountAndCanResetToDefault() throws Exception {
         long owner = user(), other = user();
         var day = LocalDate.of(2026, 12, 1);

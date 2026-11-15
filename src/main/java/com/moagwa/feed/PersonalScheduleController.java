@@ -1,5 +1,6 @@
 package com.moagwa.feed;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
 import com.moagwa.auth.CurrentUser;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.reminder.ReminderService;
@@ -25,9 +26,35 @@ class PersonalScheduleController {
     private final ReminderService reminders;
     private final ScheduleColors colors;
 
-    record Input(@NotBlank @Size(max = 100) String title, @NotNull Instant at, Instant endAt,
-                 @Size(max = 200) String location, @Size(max = 1000) String memo, Boolean reminderEnabled,
-                 @jakarta.validation.constraints.Pattern(regexp="^#[0-9A-Fa-f]{6}$") String color) {}
+    // color 누락=기존 유지, null=기본값 초기화 구분용
+    static class Input {
+        @NotBlank @Size(max = 100) private String title;
+        @NotNull private Instant at;
+        private Instant endAt;
+        @Size(max = 200) private String location;
+        @Size(max = 1000) private String memo;
+        private Boolean reminderEnabled;
+        @jakarta.validation.constraints.Pattern(regexp="^#[0-9A-Fa-f]{6}$") private String color;
+        private boolean colorPresent;
+
+        String title() { return title; }
+        Instant at() { return at; }
+        Instant endAt() { return endAt; }
+        String location() { return location; }
+        String memo() { return memo; }
+        Boolean reminderEnabled() { return reminderEnabled; }
+        String color() { return color; }
+        boolean colorPresent() { return colorPresent; }
+
+        public void setTitle(String title) { this.title = title; }
+        public void setAt(Instant at) { this.at = at; }
+        public void setEndAt(Instant endAt) { this.endAt = endAt; }
+        public void setLocation(String location) { this.location = location; }
+        public void setMemo(String memo) { this.memo = memo; }
+        public void setReminderEnabled(Boolean reminderEnabled) { this.reminderEnabled = reminderEnabled; }
+        @JsonSetter("color")
+        public void setColor(String color) { this.color = color; this.colorPresent = true; }
+    }
 
     private MapSqlParameterSource params(Input input, Authentication auth) {
         if (input.endAt() != null && !input.endAt().isAfter(input.at())) {
@@ -49,7 +76,7 @@ class PersonalScheduleController {
                 VALUES (:user, :title, :at, :endAt, :location, :memo) RETURNING id
                 """, params(input, auth), Long.class);
         if (Boolean.TRUE.equals(input.reminderEnabled())) reminders.set(CurrentUser.from(auth).id(), "PERSONAL", id, true);
-        colors.set(CurrentUser.from(auth).id(), "PERSONAL", "PERSONAL", id, input.color());
+        if (input.colorPresent()) colors.set(CurrentUser.from(auth).id(), "PERSONAL", "PERSONAL", id, input.color());
         return Map.of("id", id);
     }
 
@@ -62,7 +89,7 @@ class PersonalScheduleController {
                 WHERE id = :id AND user_id = :user
                 """, params(input, auth).addValue("id", id));
         if (count == 0) throw ApiException.notFound("일정을 찾을 수 없습니다.");
-        colors.set(CurrentUser.from(auth).id(), "PERSONAL", "PERSONAL", id, input.color());
+        if (input.colorPresent()) colors.set(CurrentUser.from(auth).id(), "PERSONAL", "PERSONAL", id, input.color());
         if (input.reminderEnabled() != null) reminders.set(CurrentUser.from(auth).id(), "PERSONAL", id, input.reminderEnabled());
     }
 
