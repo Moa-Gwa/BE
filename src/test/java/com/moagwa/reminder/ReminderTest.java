@@ -45,6 +45,22 @@ class ReminderTest {
         jdbc.update("UPDATE personal_schedules SET starts_at=now()+INTERVAL '23 hours 55 minutes' WHERE id=?",id);
         reminders.sendDue(); assertThat(count()).isEqualTo(2);
     }
+    @Test void periodEndEditsDoNotChangeTheStartReminderOrSendDuplicates() {
+        jdbc.update("UPDATE personal_schedules SET ends_at=starts_at+INTERVAL '3 days' WHERE id=?", id);
+        enableDue("PERSONAL", id);
+        var before = reminders.state(user, "PERSONAL", id);
+        assertThat(before.remindAt()).isEqualTo(before.at().minusSeconds(86400));
+        reminders.sendDue();
+        assertThat(count()).isEqualTo(1);
+        jdbc.update("UPDATE personal_schedules SET ends_at=ends_at+INTERVAL '2 days' WHERE id=?", id);
+        assertThat(reminders.state(user, "PERSONAL", id).remindAt()).isEqualTo(before.remindAt());
+        reminders.sendDue();
+        assertThat(count()).isEqualTo(1);
+        jdbc.update("UPDATE personal_schedules SET starts_at=now()+INTERVAL '23 hours 55 minutes' WHERE id=?", id);
+        reminders.sendDue();
+        assertThat(count()).isEqualTo(2);
+    }
+
     @Test void lateOptInOffDeletedExpiredAndGlobalOffDoNotSend() {
         reminders.set(user,"PERSONAL",id,true);
         reminders.sendDue(); assertThat(count()).isZero();
