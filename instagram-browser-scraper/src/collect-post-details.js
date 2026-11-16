@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { extractImageUrls, normalizePostUrl, shortcodeFromUrl } from './instagram.js';
+import { extractCaption, extractPublishedAt, extractImageUrls, normalizePostUrl, shortcodeFromUrl } from './instagram.js';
 
 const input = await readInput();
 const postUrls = [...new Set((input.postUrls ?? []).map(normalizePostUrl).filter(Boolean))];
@@ -26,18 +26,22 @@ try {
     for (const postUrl of postUrls) {
         const page = await context.newPage();
         try {
-            await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+            const response = await page.goto(postUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+            if (response?.status() === 429) throw new Error('INSTAGRAM_RATE_LIMIT: pause before retrying');
             await page.waitForFunction(() => document.querySelectorAll('._aagu img[src], article img[src]').length > 0,
                 undefined, { timeout: 10_000 }).catch(() => undefined);
 
             const carouselUrls = await collectCarouselImageUrls(page);
-            const [html, metadataUrls, caption, publishedAt] = await Promise.all([
+            const [html, metadataUrls, description, renderedCaption, publishedAt] = await Promise.all([
                 page.content(),
                 page.locator('meta[property="og:image"], meta[name="twitter:image"]')
                     .evaluateAll((elements) => elements.map((element) => element.content)),
                 page.locator('meta[property="og:description"], meta[name="description"]')
                     .evaluateAll((elements) => elements.map((element) => element.content)
                         .find((content) => typeof content === 'string' && content.trim().length > 0) ?? ''),
+                page.locator('article h1, main h1').evaluateAll((elements) => elements
+                    .map((element) => element.textContent)
+                    .find((text) => typeof text === 'string' && text.trim().length > 0) ?? ''),
                 page.locator('time[datetime]').first().getAttribute('datetime').catch(() => null),
             ]);
             const imageUrls = extractImageUrls(html, [...carouselUrls, ...metadataUrls]);
@@ -45,11 +49,12 @@ try {
                 postUrl,
                 shortcode: shortcodeFromUrl(postUrl),
                 imageUrls,
-                caption,
-                publishedAt,
+                caption: extractCaption(renderedCaption, description),
+                publishedAt: extractPublishedAt(publishedAt, html, shortcodeFromUrl(postUrl)),
                 status: imageUrls.length > 0 ? 'ok' : 'no_images',
             });
         } catch (error) {
+            if (String(error).includes('INSTAGRAM_RATE_LIMIT')) throw error;
             posts.push({
                 postUrl,
                 shortcode: shortcodeFromUrl(postUrl),

@@ -67,7 +67,7 @@ class InstagramPersistence {
                 .toList();
         for (InstagramPost post : fresh) {
             CrawledNotice notice = new CrawledNotice(source, post.externalId(), post.title(), post.url(), false,
-                    post.publishedAt() == null ? now : post.publishedAt(), now);
+                    java.util.Objects.requireNonNull(post.publishedAt(), "Instagram post date is required"), now);
             notice.applyContent(null, post.caption());
             notice.assignImages(post.imageUrls());
             CrawledNotice saved = notices.save(notice);

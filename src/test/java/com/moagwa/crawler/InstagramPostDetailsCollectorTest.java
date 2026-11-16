@@ -13,6 +13,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 class InstagramPostDetailsCollectorTest {
     @TempDir Path temp;
 
+    @Test void separatesTheFirstCaptionLineAsTitleAndPreservesTheOriginalBody() throws Exception {
+        Path script = temp.resolve("caption.sh");
+        Files.writeString(script, "cat >/dev/null\ncat <<'JSON'\n" + new ObjectMapper().writeValueAsString(
+                Map.of("posts", List.of(Map.of("shortcode", "TEST",
+                        "imageUrls", List.of("https://cdn.example/image.jpg"),
+                        "caption", "[행사 안내]\n\n본문과 #학생회")))) + "\nJSON\n");
+        var properties = new InstagramCrawlerProperties(true, null, null, 3, "/bin/sh", null,
+                script.toString(), Duration.ofSeconds(10));
+        var posts = new InstagramPostDetailsCollector(new ObjectMapper(), properties).collect(List.of(
+                new InstagramLinkCollector.InstagramPostLink("test", "TEST", "https://www.instagram.com/p/TEST/")));
+
+        assertThat(posts).hasSize(1);
+        assertThat(posts.get(0).title()).isEqualTo("[행사 안내]");
+        assertThat(posts.get(0).caption()).isEqualTo("[행사 안내]\n\n본문과 #학생회");
+    }
+
     @Test void drainsLargeStdoutAndStderrBeforeWaitingForTheProcessToExit() throws Exception {
         var mapper = new ObjectMapper();
         String caption = "본문 ".repeat(50000);

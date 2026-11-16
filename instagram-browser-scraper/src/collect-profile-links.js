@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { waitForProfilePostLinks } from './profile-links.js';
+import { collectProfilePostLinksSince, readPostPublishedAt, waitForProfilePostLinks } from './profile-links.js';
 
 const input = await readInput();
 const accounts = Array.isArray(input.accounts) ? input.accounts : [];
@@ -33,9 +33,12 @@ try {
 
         const page = await context.newPage();
         try {
-            await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-            const links = await waitForProfilePostLinks(page, limit);
-            if (links.length === 0) {
+            const response = await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+            if (response?.status() === 429) throw new Error('INSTAGRAM_RATE_LIMIT: pause before retrying');
+            const links = input.since
+                ? await collectProfilePostLinksSince(page, input.since, url => readPostPublishedAt(context, url))
+                : await waitForProfilePostLinks(page, limit);
+            if (links.length === 0 && !input.since) {
                 throw new Error(`Instagram profile posts were not rendered for @${username}`);
             }
             results.push({ username, links });

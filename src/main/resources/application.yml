@@ -81,6 +81,8 @@ crawler:
     interval: ${INSTAGRAM_CRAWLER_INTERVAL:P1D}
     initial-delay: ${INSTAGRAM_CRAWLER_INITIAL_DELAY:PT1M}
     results-limit: ${INSTAGRAM_CRAWLER_RESULTS_LIMIT:3}
+    # Inclusive Korean date; when set, scan profiles back to this date instead of results-limit.
+    since: ${INSTAGRAM_CRAWLER_SINCE:}
     node-command: ${INSTAGRAM_CRAWLER_NODE:node}
     profile-links-script: ${INSTAGRAM_PROFILE_LINKS_SCRIPT:instagram-browser-scraper/src/collect-profile-links.js}
     post-details-script: ${INSTAGRAM_POST_DETAILS_SCRIPT:instagram-browser-scraper/src/collect-post-details.js}

@@ -1,6 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractImageUrls, normalizePostUrl, shortcodeFromUrl } from '../src/instagram.js';
+import { extractCaption, extractPublishedAt, extractImageUrls, normalizePostUrl, shortcodeFromUrl } from '../src/instagram.js';
+
+test('uses the rendered time, then the post taken_at, and never the description date', () => {
+    assert.equal(extractPublishedAt('2026-10-06T12:34:00Z', ''), '2026-10-06T12:34:00.000Z');
+    const html = '{"code":"OTHER","taken_at":1700000000} ... {"code":"DdkxCH7EW2o","caption":{},"taken_at":1758514499}';
+    assert.equal(extractPublishedAt(null, html, 'DdkxCH7EW2o'), '2025-09-22T04:14:59.000Z');
+    assert.equal(extractPublishedAt(null, '{"code":"OTHER","taken_at":1700000000}', 'DdkxCH7EW2o'), null);
+    assert.equal(extractPublishedAt(null, '12 likes - cuk_ai on October 6, 2026: "공지".'), null);
+    assert.equal(extractPublishedAt(null, ''), null);
+});
+
+test('removes metadata counts, author, date and outer quotes without altering the post', () => {
+    const caption = '[행사 안내]\n\n본문의 likes, comment와 "인용"은 유지합니다.\n#학생회';
+    for (const prefix of ['31 likes, 0 comments - ', '1 like, 1 comment - ', '1.2K likes - ', '']) {
+        assert.equal(extractCaption('', `${prefix}cuk_ns on November 9, 2026: "${caption}".`), caption);
+    }
+});
+
+test('prefers actual caption and does not strip authored likes or comments', () => {
+    const caption = '  likes, comments 참여 안내\n본문  ';
+    assert.equal(extractCaption(caption, 'unrelated metadata'), caption.trim());
+});
+
+test('posts without captions have no platform metadata as their body', () => {
+    assert.equal(extractCaption('', 'cuk_chinese on February 26, 2026'), '');
+    assert.equal(extractCaption('', '31 likes, 0 comments - cuk_ns on November 9, 2026'), '');
+    assert.equal(extractCaption('', 'Instagram • photos and videos'), '');
+    assert.equal(extractCaption(''), '');
+});
 
 test('normalizes only Instagram post URLs', () => {
     assert.equal(normalizePostUrl('https://instagram.com/p/Ab_C-12/?utm_source=test'),
