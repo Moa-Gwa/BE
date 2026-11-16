@@ -69,7 +69,7 @@ class ScheduleColorTest {
     @Test void academicColorsArePrivateToEachAccountAndCanResetToDefault() throws Exception {
         long owner = user(), other = user();
         var day = LocalDate.of(2026, 12, 1);
-        when(academic.entries(day, day.plusDays(1))).thenReturn(List.of(new ScheduleEntry("ACADEMIC", Instant.parse("2026-11-30T15:00:00Z"), "ACADEMIC", 100, "기말고사", "성심교정", null, false)));
+        when(academic.entries(day, day.plusDays(1))).thenReturn(List.of(new ScheduleEntry("ACADEMIC", Instant.parse("2026-11-30T15:00:00Z"), "ACADEMIC", 100, "기말고사", "성심교정", null, false, null, null, null)));
         mvc.perform(put("/api/me/schedule-colors/ACADEMIC/100").header("Authorization", auth(owner)).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"type\":\"ACADEMIC\",\"color\":\"#b83b72\"}")).andExpect(status().isNoContent());
         mvc.perform(get(query).header("Authorization", auth(owner))).andExpect(jsonPath("$[?(@.source == 'ACADEMIC')].color", hasItem("#B83B72")));

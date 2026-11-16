@@ -37,7 +37,7 @@ class PersonalScheduleTest {
         var from = java.time.LocalDate.of(2026, 12, 1);
         var entry = new com.moagwa.feed.ScheduleEntry("ACADEMIC", java.time.Instant.parse("2026-11-30T15:00:00Z"),
                 "ACADEMIC", 1L, "성심교정 기말고사", "성심교정 학사일정", null, false, null,
-                com.moagwa.feed.AcademicCalendar.url(2026));
+                com.moagwa.feed.AcademicCalendar.url(2026), null);
         org.mockito.Mockito.when(academicCalendar.entries(from, from.plusDays(1))).thenReturn(java.util.List.of(entry));
         for (String auth : new String[]{"", student()}) {
             mvc.perform(get("/api/schedule?from=2026-12-01&to=2026-12-01").header("Authorization", auth))
@@ -106,6 +106,17 @@ class PersonalScheduleTest {
                 .andExpect(status().isNoContent());
         mvc.perform(get(query).header("Authorization", owner))
                 .andExpect(jsonPath("$[?(@.source == 'PERSONAL')]", hasSize(0)));
+    }
+
+    @Test
+    void locationAndMemoAreTrimmedAndBlankIsStoredAsNull() throws Exception {
+        String owner = student();
+        mvc.perform(post("/api/me/schedules").header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                .content(input.replace("\"도서관\"", "\"  도서관 \"").replace("\"자료 준비\"", "\"   \"")))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/schedule?from=2026-12-01&to=2026-12-01").header("Authorization", owner))
+                .andExpect(jsonPath("$[?(@.source == 'PERSONAL')].location", hasItem("도서관")))
+                .andExpect(jsonPath("$[?(@.source == 'PERSONAL')].memo", hasItem(nullValue())));
     }
 
     @Test

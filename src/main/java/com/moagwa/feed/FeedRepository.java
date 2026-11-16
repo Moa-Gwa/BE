@@ -127,17 +127,16 @@ class FeedRepository {
                         ON b.user_id = CAST(:viewer AS bigint) AND b.source = f.source AND b.notice_id = f.id
                      WHERE f.source = 'MANUAL' OR b.user_id IS NOT NULL
                 )
-                SELECT s.*, (SELECT p.memo FROM personal_schedules p
-                    WHERE s.source = 'PERSONAL' AND p.id = s.id AND p.user_id = CAST(:viewer AS bigint)) AS memo FROM (
+                SELECT s.* FROM (
                     SELECT 'EVENT' AS type, i.event_start_at AS at, i.event_end_at AS end_at, i.source, i.id, i.title,
-                           i.organization_name, i.location, i.bookmarked
+                           i.organization_name, i.location, i.bookmarked, CAST(NULL AS text) AS memo
                       FROM items i WHERE i.event_start_at IS NOT NULL
                     UNION ALL
                     SELECT 'DEADLINE', i.deadline_at, NULL, i.source, i.id, i.title, i.organization_name, i.location,
-                           i.bookmarked
+                           i.bookmarked, NULL
                       FROM items i WHERE i.deadline_at IS NOT NULL
                     UNION ALL
-                    SELECT 'PERSONAL', starts_at, ends_at, 'PERSONAL', id, title, '내 일정', location, false
+                    SELECT 'PERSONAL', starts_at, ends_at, 'PERSONAL', id, title, '내 일정', location, false, memo
                       FROM personal_schedules WHERE user_id = CAST(:viewer AS bigint)
                 ) s
                 WHERE s.at < :to AND (s.at >= :from OR s.end_at > :from)
