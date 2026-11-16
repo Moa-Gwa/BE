@@ -87,7 +87,7 @@ management:
       probes:
         enabled: true
 
-# API 문서(Swagger)는 기본 비활성화, local 프로필에서만 켬
+# API 문서(Swagger)는 기본 비활성화, local·prod 프로필에서 켬
 springdoc:
   api-docs:
     enabled: false
