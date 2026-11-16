@@ -18,7 +18,7 @@ class AdminApplicationRepository {
 
     /** 승인 처리에 필요한 신청 내용 */
     record Application(long id, String status, String organizationName, String university, String department,
-                       String contactName, String email, String channelUrl, Long adminId) {
+                       String contactName, String email, String loginId, String channelUrl, Long adminId) {
 
         boolean pending() {
             return "PENDING".equals(status);
@@ -37,8 +37,9 @@ class AdminApplicationRepository {
     long insert(ApplicationForm f, String email) {
         return jdbc.queryForObject("""
                 INSERT INTO admin_applications
-                    (organization_name, university, department, contact_name, email, phone, channel_url, reason)
-                VALUES (:org, :uni, :dept, :name, :email, :phone, :channel, :reason)
+                    (organization_name, university, department, contact_name, email, login_id, phone, channel_url,
+                     reason)
+                VALUES (:org, :uni, :dept, :name, :email, :loginId, :phone, :channel, :reason)
                 RETURNING id""",
                 new MapSqlParameterSource()
                         .addValue("org", f.organizationName().trim())
@@ -46,6 +47,7 @@ class AdminApplicationRepository {
                         .addValue("dept", f.department().trim())
                         .addValue("name", f.contactName().trim())
                         .addValue("email", email)
+                        .addValue("loginId", f.loginId())
                         .addValue("phone", f.phone().trim())
                         .addValue("channel", f.channelUrl().trim())
                         .addValue("reason", f.reason().trim()),
@@ -54,15 +56,15 @@ class AdminApplicationRepository {
 
     List<ApplicationView> findByStatus(String status) {
         return jdbc.query("""
-                SELECT id, organization_name, university, department, contact_name, email, phone, channel_url,
-                       reason, status, rejection_reason, created_at
+                SELECT id, organization_name, university, department, contact_name, email, login_id, phone,
+                       channel_url, reason, status, rejection_reason, created_at
                   FROM admin_applications
                  WHERE status = :status
                  ORDER BY created_at""",
                 new MapSqlParameterSource("status", status),
                 (rs, i) -> new ApplicationView(rs.getLong("id"), rs.getString("organization_name"),
                         rs.getString("university"), rs.getString("department"), rs.getString("contact_name"),
-                        rs.getString("email"), rs.getString("phone"), rs.getString("channel_url"),
+                        rs.getString("email"), rs.getString("login_id"), rs.getString("phone"), rs.getString("channel_url"),
                         rs.getString("reason"), rs.getString("status"), rs.getString("rejection_reason"),
                         rs.getTimestamp("created_at").toInstant().toString()));
     }
@@ -70,17 +72,25 @@ class AdminApplicationRepository {
     /** 승인이 동시에 두 번 처리되지 않도록 행을 잠근 채 읽음 */
     Optional<Application> lock(long id) {
         return jdbc.query("""
-                SELECT id, status, organization_name, university, department, contact_name, email, channel_url,
-                       admin_id
+                SELECT id, status, organization_name, university, department, contact_name, email, login_id,
+                       channel_url, admin_id
                   FROM admin_applications
                  WHERE id = :id
                    FOR UPDATE""",
                 new MapSqlParameterSource("id", id),
                 (rs, i) -> new Application(rs.getLong("id"), rs.getString("status"),
                         rs.getString("organization_name"), rs.getString("university"), rs.getString("department"),
-                        rs.getString("contact_name"), rs.getString("email"), rs.getString("channel_url"),
+                        rs.getString("contact_name"), rs.getString("email"), rs.getString("login_id"),
+                        rs.getString("channel_url"),
                         rs.getObject("admin_id", Long.class)))
                 .stream().findFirst();
+    }
+
+    boolean activeLoginIdExists(String loginId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM admin_applications
+                                WHERE lower(login_id) = lower(:loginId) AND status IN ('PENDING', 'APPROVED'))""",
+                new MapSqlParameterSource("loginId", loginId), Boolean.class));
     }
 
     boolean exists(long id) {
@@ -108,13 +118,15 @@ class AdminApplicationRepository {
                         .addValue("expires", Timestamp.from(setupExpiresAt)));
     }
 
-    /** 대기 중인 신청만 거절됨. 거절했으면 true */
-    boolean rejectPending(long id, String reason) {
-        return jdbc.update("""
+    /** 대기 중인 신청만 거절됨. 거절했으면 신청 메일을 돌려줌 */
+    Optional<String> rejectPending(long id, String reason) {
+        return jdbc.queryForList("""
                 UPDATE admin_applications
                    SET status = 'REJECTED', rejection_reason = :reason, resolved_at = now()
-                 WHERE id = :id AND status = 'PENDING'""",
-                new MapSqlParameterSource().addValue("id", id).addValue("reason", reason)) > 0;
+                 WHERE id = :id AND status = 'PENDING'
+                RETURNING email""",
+                new MapSqlParameterSource().addValue("id", id).addValue("reason", reason), String.class)
+                .stream().findFirst();
     }
 
     Optional<SetupTarget> findSetup(String setupTokenHash) {

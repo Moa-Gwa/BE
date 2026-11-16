@@ -4,6 +4,7 @@ import com.moagwa.admin.AdminApplicationDto.ApplicationForm;
 import com.moagwa.admin.AdminApplicationDto.ApplicationView;
 import com.moagwa.admin.AdminApplicationDto.Approved;
 import com.moagwa.admin.AdminApplicationDto.PasswordSetup;
+import com.moagwa.admin.AdminApplicationDto.Rejected;
 import com.moagwa.admin.AdminApplicationDto.Rejection;
 import com.moagwa.admin.AdminApplicationDto.SetupStatus;
 import com.moagwa.admin.AdminApplicationDto.SetupToken;
@@ -52,9 +53,8 @@ class AdminApplicationController {
     }
 
     @PostMapping("/admin/applications/{id}/reject")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    void reject(@PathVariable long id, @Valid @RequestBody(required = false) Rejection body) {
-        service.reject(id, body == null ? null : body.reason());
+    Rejected reject(@PathVariable long id, @Valid @RequestBody(required = false) Rejection body) {
+        return service.reject(id, body == null ? null : body.reason());
     }
 
     @PostMapping("/admin/auth/setup/validate")
