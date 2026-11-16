@@ -69,7 +69,8 @@ class MeRepository {
     List<NotificationView> recentNotifications(long userId) {
         return jdbc.query("""
                 SELECT id, type, source, notice_id, title, body, read_at, created_at FROM notifications
-                 WHERE user_id = :u ORDER BY created_at DESC, id DESC LIMIT :limit""",
+                 WHERE user_id = :u AND (read_at IS NULL OR read_at > now() - INTERVAL '14 days')
+                 ORDER BY created_at DESC, id DESC LIMIT :limit""",
                 new MapSqlParameterSource().addValue("u", userId).addValue("limit", NOTIFICATION_LIMIT), (rs, i) -> {
                     Timestamp read = rs.getTimestamp("read_at");
                     return new NotificationView(rs.getLong("id"), rs.getString("type"), rs.getString("source"),
