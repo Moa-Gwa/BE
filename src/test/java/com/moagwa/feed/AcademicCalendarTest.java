@@ -46,6 +46,15 @@ class AcademicCalendarTest {
         verify(fetcher, times(1)).fetch(AcademicCalendar.url(2026));
     }
 
+    @Test void configuredFetchUrlIsUsedWhileEntriesKeepTheOfficialLink() throws Exception {
+        PageFetcher fetcher = mock(PageFetcher.class);
+        when(fetcher.fetch("http://localhost:3101/academic-2026.html")).thenReturn(Jsoup.parse(html));
+        var entries = new AcademicCalendar(fetcher, "http://localhost:3101/academic-{year}.html")
+                .entries(LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+        assertThat(entries).hasSize(1).allSatisfy(e -> assertThat(e.sourceUrl()).isEqualTo(AcademicCalendar.url(2026)));
+        verify(fetcher, never()).fetch(AcademicCalendar.url(2026));
+    }
+
     @Test void realOfficialFixtureHasSeongsimFinalsAndNoOtherCampusOnlyEvents() throws Exception {
         try (var in = getClass().getResourceAsStream("/academic/seongsim-2026.html")) {
             var events = AcademicCalendar.parse(Jsoup.parse(new String(in.readAllBytes(), StandardCharsets.UTF_8)), 2026);
