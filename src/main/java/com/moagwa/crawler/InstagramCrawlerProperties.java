@@ -28,7 +28,7 @@ public record InstagramCrawlerProperties(
             postDetailsScript = "instagram-browser-scraper/src/collect-post-details.js";
         }
         if (commandTimeout == null || commandTimeout.isNegative() || commandTimeout.isZero()) {
-            commandTimeout = Duration.ofMinutes(3);
+            commandTimeout = Duration.ofMinutes(30);
         }
     }
 }

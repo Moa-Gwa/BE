@@ -6,7 +6,7 @@ const postUrls = [...new Set((input.postUrls ?? []).map(normalizePostUrl).filter
 const sessionId = process.env.INSTAGRAM_SESSION_ID?.trim();
 
 if (postUrls.length === 0) throw new Error('postUrls must contain at least one Instagram post URL');
-if (postUrls.length > 60) throw new Error('At most 60 post URLs can be processed in one local run');
+if (postUrls.length > 150) throw new Error('At most 150 post URLs can be processed in one local run');
 if (!sessionId) throw new Error('INSTAGRAM_SESSION_ID is not configured');
 
 const browser = await chromium.launch({ headless: true });

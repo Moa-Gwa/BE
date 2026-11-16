@@ -20,3 +20,27 @@ test('keeps first unique profile links up to the limit', () => {
         { externalId: 'SECOND-2', url: 'https://www.instagram.com/reel/SECOND-2/' },
     ]);
 });
+
+test('waits through empty pages and hydration navigation before collecting links', async () => {
+    const { waitForProfilePostLinks } = await import('../src/profile-links.js');
+    let polls = 0, waits = 0;
+    const page = {
+        locator: () => ({ evaluateAll: async () => {
+            polls += 1;
+            if (polls === 1) throw new Error('Execution context was destroyed');
+            return polls === 2 ? [] : ['/p/READY_1/', '/p/READY_1/', '/p/READY_2/'];
+        } }),
+        waitForTimeout: async () => { waits += 1; },
+    };
+    assert.deepEqual(await waitForProfilePostLinks(page, 1), [{ externalId: 'READY_1', url: 'https://www.instagram.com/p/READY_1/' }]);
+    assert.equal(polls, 3);
+    assert.equal(waits, 2);
+});
+
+test('stops polling an unavailable profile after the bounded render wait', async () => {
+    const { waitForProfilePostLinks } = await import('../src/profile-links.js');
+    let waits = 0;
+    const page = { locator: () => ({ evaluateAll: async () => [] }), waitForTimeout: async () => { waits += 1; } };
+    assert.deepEqual(await waitForProfilePostLinks(page, 3), []);
+    assert.equal(waits, 60);
+});
