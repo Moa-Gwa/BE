@@ -20,7 +20,7 @@ import java.util.stream.IntStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -32,7 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Component
-@Profile("local")
+@ConditionalOnProperty(prefix = "moagwa.instagram-snapshot-import", name = "enabled", havingValue = "true")
 @Order(100)
 @RequiredArgsConstructor
 class InstagramNoticeImporter implements CommandLineRunner {
@@ -61,29 +61,22 @@ class InstagramNoticeImporter implements CommandLineRunner {
         }
 
         int created = 0;
+        int skipped = 0;
         for (Account account : accounts) {
-            Organization council = organizations.findByName(account.org() + " 학생회")
-                    .orElseGet(() -> createCouncil(account));
             String sourceCode = "instagram_student_council_" + account.instagram();
-            CrawlSource source = sources.findByCode(sourceCode).orElseGet(() -> createSource(sourceCode, council, account));
+            CrawlSource source = sources.findByCode(sourceCode).orElseGet(() -> {
+                Organization council = organizations.findByName(account.org() + " 학생회")
+                        .orElseGet(() -> createCouncil(account));
+                return createSource(sourceCode, council, account);
+            });
 
             for (Post post : account.posts()) {
-                List<String> images = IntStream.range(0, imageCounts.getOrDefault(post.externalId(), 0))
-                        .mapToObj(i -> "/instagram/" + post.externalId() + "_" + i + ".jpg").toList();
                 if (notices.findExistingExternalIds(source.getId(), List.of(post.externalId())).contains(post.externalId())) {
-                    notices.findBySourceAndExternalId(source.getId(), post.externalId()).ifPresent(existing -> {
-                        if (!existing.getImageUrls().equals(images)) {
-                            existing.assignImages(images);
-                        }
-                        if (!java.util.Objects.equals(existing.getCategory(), post.category())) {
-                            existing.changeCategory(post.category());
-                        }
-                        if (!java.util.Objects.equals(existing.getContentText(), post.contentText())) {
-                            existing.applyContent(null, post.contentText());
-                        }
-                    });
+                    skipped++;
                     continue;
                 }
+                List<String> images = IntStream.range(0, imageCounts.getOrDefault(post.externalId(), 0))
+                        .mapToObj(i -> "/instagram/" + post.externalId() + "_" + i + ".jpg").toList();
                 Instant publishedAt = LocalDate.parse(post.publishedDate()).atStartOfDay(KST).toInstant();
                 CrawledNotice notice = new CrawledNotice(source, post.externalId(), post.title(), post.url(),
                         post.pinned(), publishedAt, publishedAt);
@@ -94,7 +87,7 @@ class InstagramNoticeImporter implements CommandLineRunner {
                 created++;
             }
         }
-        log.info("Instagram student-council snapshot imported: {} new notices", created);
+        log.info("Instagram student-council snapshot imported: {} new notices, {} existing notices skipped", created, skipped);
     }
 
     private Organization createCouncil(Account account) {

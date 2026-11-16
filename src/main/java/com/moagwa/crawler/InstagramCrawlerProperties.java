@@ -1,6 +1,7 @@
 package com.moagwa.crawler;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** Runtime settings for the local Playwright Instagram crawler. */
@@ -13,7 +14,8 @@ public record InstagramCrawlerProperties(
         String nodeCommand,
         String profileLinksScript,
         String postDetailsScript,
-        Duration commandTimeout) {
+        Duration commandTimeout,
+        LocalDate since) {
 
     public InstagramCrawlerProperties {
         if (interval == null || interval.isNegative() || interval.isZero()) interval = Duration.ofDays(1);
@@ -28,7 +30,7 @@ public record InstagramCrawlerProperties(
             postDetailsScript = "instagram-browser-scraper/src/collect-post-details.js";
         }
         if (commandTimeout == null || commandTimeout.isNegative() || commandTimeout.isZero()) {
-            commandTimeout = Duration.ofMinutes(3);
+            commandTimeout = Duration.ofMinutes(30);
         }
     }
 }

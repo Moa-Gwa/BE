@@ -23,7 +23,6 @@ import java.util.concurrent.Executors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.nodes.Document;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -42,7 +41,6 @@ public class CrawlerService {
     private static final int MEDIA_BACKFILL_BATCH = 5;
     private static final Duration MEDIA_RETRY_AFTER = Duration.ofDays(1);
 
-    private final ApplicationEventPublisher events;
     private final CrawlerProperties properties;
     private final Clock clock;
 
@@ -111,12 +109,8 @@ public class CrawlerService {
                     item.pinned(), publishedAt, now);
             notice.assignCategory(BoardCategoryMapper.toCode(item.category()));
             try {
-                CrawledNotice saved = persistence.saveNew(notice, content.orElse(null));
+                persistence.saveNew(notice, content.orElse(null), !firstCrawl);
                 created++;
-                if (!firstCrawl) {
-                    events.publishEvent(new CrawledNoticeCreatedEvent(saved.getId(), source.getId(),
-                            source.getOrganization().getId(), saved.getTitle()));
-                }
             } catch (DataIntegrityViolationException duplicate) {
                 log.debug("[{}] {} already stored by a concurrent run", source.getCode(), item.externalId());
             }

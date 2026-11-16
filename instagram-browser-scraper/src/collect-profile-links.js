@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { collectProfilePostLinks } from './profile-links.js';
+import { collectProfilePostLinksSince, readPostPublishedAt, waitForProfilePostLinks } from './profile-links.js';
 
 const input = await readInput();
 const accounts = Array.isArray(input.accounts) ? input.accounts : [];
@@ -33,15 +33,12 @@ try {
 
         const page = await context.newPage();
         try {
-            await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-            await page.waitForFunction(() => Array.from(document.querySelectorAll('a[href]'))
-                .some((anchor) => /^\/(?:[A-Za-z0-9._]+\/)?(?:p|reel|tv)\/[A-Za-z0-9_-]+/.test(anchor.getAttribute('href') ?? '')),
-            undefined, { timeout: 10_000 }).catch(() => undefined);
-            const hrefs = await page.locator('a[href]').evaluateAll((anchors) => anchors
-                .map((anchor) => anchor.getAttribute('href'))
-                .filter((href) => typeof href === 'string'));
-            const links = collectProfilePostLinks(hrefs, limit);
-            if (links.length === 0) {
+            const response = await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+            if (response?.status() === 429) throw new Error('INSTAGRAM_RATE_LIMIT: pause before retrying');
+            const links = input.since
+                ? await collectProfilePostLinksSince(page, input.since, url => readPostPublishedAt(context, url))
+                : await waitForProfilePostLinks(page, limit);
+            if (links.length === 0 && !input.since) {
                 throw new Error(`Instagram profile posts were not rendered for @${username}`);
             }
             results.push({ username, links });

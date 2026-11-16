@@ -56,6 +56,7 @@ class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/notices/*/view", "/api/crawled-notices/*/view")
                         .hasRole("STUDENT")
                         .requestMatchers(HttpMethod.POST, "/api/crawled-notices/*/date-corrections").hasRole("STUDENT")
+                        .requestMatchers("/api/admin/crawler/categories/**").hasRole("OPERATOR")
                         .requestMatchers("/api/admin/applications/**").hasRole("OPERATOR")
                         .requestMatchers("/api/admin/date-corrections/**").hasRole("OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/admin-applications").permitAll()

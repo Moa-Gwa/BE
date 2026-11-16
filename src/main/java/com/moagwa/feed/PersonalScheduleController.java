@@ -1,8 +1,8 @@
 package com.moagwa.feed;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
 import com.moagwa.auth.CurrentUser;
-import com.moagwa.common.exception.ApiException;
-import com.moagwa.reminder.ReminderService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,60 +11,65 @@ import java.time.Instant;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.security.core.Authentication;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "개인 일정", description = "학생 로그인 필요")
 @RestController
 @RequestMapping("/api/me/schedules")
 @RequiredArgsConstructor
 class PersonalScheduleController {
-    private final NamedParameterJdbcTemplate jdbc;
-    private final ReminderService reminders;
+    private final PersonalScheduleService service;
 
-    record Input(@NotBlank @Size(max = 100) String title, @NotNull Instant at,
-                 @Size(max = 200) String location, @Size(max = 1000) String memo, Boolean reminderEnabled) {}
+    // color 누락=기존 유지, null=기본값 초기화 구분용
+    static class Input {
+        @NotBlank @Size(max = 100) private String title;
+        @NotNull private Instant at;
+        private Instant endAt;
+        @Size(max = 200) private String location;
+        @Size(max = 1000) private String memo;
+        private Boolean reminderEnabled;
+        @jakarta.validation.constraints.Pattern(regexp="^#[0-9A-Fa-f]{6}$") private String color;
+        private boolean colorPresent;
 
-    private MapSqlParameterSource params(Input input, Authentication auth) {
-        return new MapSqlParameterSource("user", CurrentUser.from(auth).id())
-                .addValue("title", input.title().strip())
-                .addValue("at", java.sql.Timestamp.from(input.at()))
-                .addValue("location", input.location()).addValue("memo", input.memo());
+        String title() { return title.strip(); }
+        Instant at() { return at; }
+        Instant endAt() { return endAt; }
+        String location() { return blankToNull(location); }
+        String memo() { return blankToNull(memo); }
+        Boolean reminderEnabled() { return reminderEnabled; }
+        String color() { return color; }
+        boolean colorPresent() { return colorPresent; }
+
+        public void setTitle(String title) { this.title = title; }
+        public void setAt(Instant at) { this.at = at; }
+        public void setEndAt(Instant endAt) { this.endAt = endAt; }
+        public void setLocation(String location) { this.location = location; }
+        public void setMemo(String memo) { this.memo = memo; }
+        public void setReminderEnabled(Boolean reminderEnabled) { this.reminderEnabled = reminderEnabled; }
+        @JsonSetter("color")
+        public void setColor(String color) { this.color = color; this.colorPresent = true; }
+
+        private static String blankToNull(String value) {
+            return value == null || value.isBlank() ? null : value.strip();
+        }
     }
 
-    @Transactional
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     Map<String, Long> create(@Valid @RequestBody Input input, Authentication auth) {
-        Long id = jdbc.queryForObject("""
-                INSERT INTO personal_schedules(user_id, title, starts_at, location, memo)
-                VALUES (:user, :title, :at, :location, :memo) RETURNING id
-                """, params(input, auth), Long.class);
-        if (Boolean.TRUE.equals(input.reminderEnabled())) reminders.set(CurrentUser.from(auth).id(), "PERSONAL", id, true);
-        return Map.of("id", id);
+        return Map.of("id", service.create(CurrentUser.from(auth).id(), input));
     }
 
-    @Transactional
     @PutMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void update(@PathVariable long id, @Valid @RequestBody Input input, Authentication auth) {
-        int count = jdbc.update("""
-                UPDATE personal_schedules SET title = :title, starts_at = :at, location = :location, memo = :memo
-                WHERE id = :id AND user_id = :user
-                """, params(input, auth).addValue("id", id));
-        if (count == 0) throw ApiException.notFound("일정을 찾을 수 없습니다.");
-        if (input.reminderEnabled() != null) reminders.set(CurrentUser.from(auth).id(), "PERSONAL", id, input.reminderEnabled());
+        service.update(CurrentUser.from(auth).id(), id, input);
     }
 
-    @Transactional
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(@PathVariable long id, Authentication auth) {
-        reminders.remove(CurrentUser.from(auth).id(), "PERSONAL", id);
-        int count = jdbc.update("DELETE FROM personal_schedules WHERE id = :id AND user_id = :user",
-                Map.of("id", id, "user", CurrentUser.from(auth).id()));
-        if (count == 0) throw ApiException.notFound("일정을 찾을 수 없습니다.");
+        service.delete(CurrentUser.from(auth).id(), id);
     }
 }
