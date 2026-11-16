@@ -2,6 +2,8 @@ package com.moagwa.crawler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -11,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +32,9 @@ class InstagramPostDetailsCollector {
         try {
             Path scriptPath = Path.of(properties.postDetailsScript()).toAbsolutePath().normalize();
             Process process = new ProcessBuilder(properties.nodeCommand(), scriptPath.toString()).start();
+            // Drain both pipes while the child runs; a large 150-post response can fill stdout.
+            var collectedOutput = CompletableFuture.supplyAsync(() -> readOutput(process.getInputStream()));
+            var collectedError = CompletableFuture.supplyAsync(() -> readOutput(process.getErrorStream()));
             process.getOutputStream().write(objectMapper.writeValueAsBytes(new Input(
                     links.stream().map(InstagramLinkCollector.InstagramPostLink::url).distinct().toList())));
             process.getOutputStream().close();
@@ -37,8 +43,8 @@ class InstagramPostDetailsCollector {
                 process.destroyForcibly();
                 throw new IllegalStateException("Instagram post detail collector timed out");
             }
-            String stdout = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            String stderr = new String(process.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+            String stdout = collectedOutput.join();
+            String stderr = collectedError.join();
             if (process.exitValue() != 0) {
                 throw new IllegalStateException("Instagram post detail collector failed: " + trim(stderr));
             }
@@ -65,6 +71,14 @@ class InstagramPostDetailsCollector {
                 Thread.currentThread().interrupt();
             }
             throw new IllegalStateException("Could not collect Instagram post details locally", e);
+        }
+    }
+
+    private static String readOutput(InputStream stream) {
+        try (stream) {
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 

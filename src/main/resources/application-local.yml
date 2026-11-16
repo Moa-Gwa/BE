@@ -13,6 +13,8 @@ moagwa:
     cookie:
       secure: false
   dev-data: true
+  instagram-snapshot-import:
+    enabled: ${INSTAGRAM_SNAPSHOT_IMPORT_ENABLED:true}
   verification:
     expose-code: true
 

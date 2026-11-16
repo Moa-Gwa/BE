@@ -142,15 +142,15 @@ class CrawlerNotificationTest {
         String tag = UUID.randomUUID().toString();
         var account = new InstagramAccountCatalog.InstagramAccount("인스타 알림 " + tag, "test_" + tag, "https://www.instagram.com/test/");
         var first = post(account.username(), "old");
-        assertThat(instagram.importPosts(account, List.of(first))).isEqualTo(1);
+        assertThat(instagram.importPosts(account, List.of(first), true)).isEqualTo(1);
         var source = sources.findByCode("instagram_student_council_" + account.username()).orElseThrow();
         jdbc.update("INSERT INTO user_interests(user_id,kind,target_id) VALUES (?,'ORGANIZATION',?)", interested, source.getOrganization().getId());
         assertThat(pushes.items).isEmpty();
-        assertThat(instagram.importPosts(account, List.of(first, post(account.username(), "new")))).isEqualTo(1);
+        assertThat(instagram.importPosts(account, List.of(first, post(account.username(), "new")), true)).isEqualTo(1);
         assertThat(pushes.items).hasSize(1).first().satisfies(push -> assertThat(push.userIds()).containsExactly(interested));
         long id = jdbc.queryForObject("SELECT id FROM crawled_notices WHERE source_id=? AND external_id='new'", Long.class, source.getId());
         assertThat(recipients(id)).containsExactly(interested);
-        assertThat(instagram.importPosts(account, List.of(first, post(account.username(), "new")))).isZero();
+        assertThat(instagram.importPosts(account, List.of(first, post(account.username(), "new")), true)).isZero();
         assertThat(pushes.items).hasSize(1);
     }
     private InstagramPostDetailsCollector.InstagramPost post(String user, String id) {
