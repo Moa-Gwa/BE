@@ -9,6 +9,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /** Official March–February academic years. One cached list request per year every six hours. */
@@ -18,13 +19,18 @@ public class AcademicCalendar {
     private static final Pattern DATE = Pattern.compile("(?:(\\d{1,2})\\s*\\.\\s*)?(\\d{1,2})\\s*\\([월화수목금토일]\\)");
     private final PageFetcher fetcher;
     private final Clock clock;
+    // 비어 있으면 학교 사이트에서 수집. E2E 등에서 고정된 테스트 페이지를 쓸 때만 지정({year} 치환)
+    private final String fetchUrl;
     private final Map<Integer, Cached> cache = new LinkedHashMap<>();
     private record Cached(List<Event> events, Instant refreshAt) {}
     record Event(String title, LocalDate from, LocalDate to, int year) {}
 
     @Autowired
-    public AcademicCalendar(PageFetcher fetcher) { this(fetcher, Clock.systemUTC()); }
-    AcademicCalendar(PageFetcher fetcher, Clock clock) { this.fetcher = fetcher; this.clock = clock; }
+    public AcademicCalendar(PageFetcher fetcher, @Value("${moagwa.academic-calendar.fetch-url:}") String fetchUrl) {
+        this.fetcher = fetcher; this.clock = Clock.systemUTC(); this.fetchUrl = fetchUrl;
+    }
+    public AcademicCalendar(PageFetcher fetcher) { this(fetcher, ""); }
+    AcademicCalendar(PageFetcher fetcher, Clock clock) { this.fetcher = fetcher; this.clock = clock; this.fetchUrl = ""; }
 
     public static String url(int year) {
         return "https://www.catholic.ac.kr/ko/support/calendar2024_list.do?mode=list&selectedYear=" + year + "&siteId=ko";
@@ -54,7 +60,7 @@ public class AcademicCalendar {
         List<Event> events = previous == null ? List.of() : previous.events();
         Duration ttl = Duration.ofHours(6);
         try {
-            events = parse(fetcher.fetch(url(year)), year);
+            events = parse(fetcher.fetch(fetchUrl.isBlank() ? url(year) : fetchUrl.replace("{year}", String.valueOf(year))), year);
         } catch (IOException | IllegalArgumentException | DateTimeException ex) {
             LoggerFactory.getLogger(AcademicCalendar.class).warn("학사일정 {} 수집 실패: {}", year, ex.toString());
             ttl = Duration.ofMinutes(5); // Keep the last successful result; avoid repeated failing requests.
