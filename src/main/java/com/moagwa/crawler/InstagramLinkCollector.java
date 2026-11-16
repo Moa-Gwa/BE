@@ -30,9 +30,6 @@ class InstagramLinkCollector {
     @Value("${INSTAGRAM_SESSION_ID:}")
     private String sessionId;
 
-    @Value("${crawler.instagram.since:}")
-    private String since;
-
     Map<InstagramAccount, List<InstagramPostLink>> collect(List<InstagramAccount> accounts, int limit) {
         if (sessionId == null || sessionId.isBlank()) {
             throw new IllegalStateException("INSTAGRAM_SESSION_ID is not configured");
@@ -44,7 +41,7 @@ class InstagramLinkCollector {
             var collectedError = CompletableFuture.supplyAsync(() -> readOutput(process.getErrorStream()));
             process.getOutputStream().write(objectMapper.writeValueAsBytes(new Input(
                     accounts.stream().map(account -> new AccountInput(account.username(), account.profileUrl())).toList(),
-                    limit, since == null || since.isBlank() ? null : java.time.LocalDate.parse(since).toString())));
+                    limit, properties.since() == null ? null : properties.since().toString())));
             process.getOutputStream().close();
 
             if (!process.waitFor(properties.commandTimeout().toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {

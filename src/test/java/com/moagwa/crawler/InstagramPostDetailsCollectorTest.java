@@ -20,7 +20,7 @@ class InstagramPostDetailsCollectorTest {
                         "imageUrls", List.of("https://cdn.example/image.jpg"),
                         "caption", "[행사 안내]\n\n본문과 #학생회")))) + "\nJSON\n");
         var properties = new InstagramCrawlerProperties(true, null, null, 3, "/bin/sh", null,
-                script.toString(), Duration.ofSeconds(10));
+                script.toString(), Duration.ofSeconds(10), null);
         var posts = new InstagramPostDetailsCollector(new ObjectMapper(), properties).collect(List.of(
                 new InstagramLinkCollector.InstagramPostLink("test", "TEST", "https://www.instagram.com/p/TEST/")));
 
@@ -40,7 +40,7 @@ class InstagramPostDetailsCollectorTest {
         String quoted = "'" + response.toString().replace("'", "'\"'\"'") + "'";
         Files.writeString(script, "cat >/dev/null\ncat " + quoted + " >&2\ncat " + quoted + "\n");
         var properties = new InstagramCrawlerProperties(true, null, null, 3, "/bin/sh", null,
-                script.toString(), Duration.ofSeconds(10));
+                script.toString(), Duration.ofSeconds(10), null);
         var collector = new InstagramPostDetailsCollector(mapper, properties);
         var posts = collector.collect(List.of(new InstagramLinkCollector.InstagramPostLink("test", "TEST", "https://www.instagram.com/p/TEST/")));
         assertThat(posts).hasSize(1);

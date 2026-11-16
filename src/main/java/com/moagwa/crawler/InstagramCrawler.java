@@ -31,23 +31,23 @@ class InstagramCrawler {
             try {
                 var collected = links.collect(List.of(account), properties.resultsLimit());
                 var fresh = persistence.newPostLinks(account, collected.get(account));
-                int accountCreated = 0;
+                // 날짜 기준 수집은 과거 게시물 적재이므로 새 공지 알림 제외
+                boolean notify = properties.since() == null;
+                int accountCreated = 0, skipped = 0;
                 for (int offset = 0; offset < fresh.size(); offset += 150) {
                     var batch = fresh.subList(offset, Math.min(offset + 150, fresh.size()));
-                    var posts = details.collect(batch);
-                    if (posts.size() != batch.size()) {
-                        throw new IllegalStateException("Some Instagram post details could not be collected");
-                    }
-                    if (posts.stream().anyMatch(post -> post.publishedAt() == null)) {
-                        // Never substitute the crawl time; the account is retried on the next run.
-                        throw new IllegalStateException("Some Instagram post dates could not be read");
-                    }
+                    // 수집 시각으로 대체하지 않음. 저장되지 않은 게시물은 다음 실행에서 재시도됨
+                    var posts = details.collect(batch).stream().filter(post -> post.publishedAt() != null).toList();
+                    skipped += batch.size() - posts.size();
                     var storedImages = imageStorage.storeImages(posts);
                     var storedPosts = posts.stream().map(post -> withStoredImages(post, storedImages))
                             .filter(post -> !post.imageUrls().isEmpty()).toList();
-                    accountCreated += persistence.importPosts(account, storedPosts);
+                    accountCreated += persistence.importPosts(account, storedPosts, notify);
                 }
-                if (fresh.isEmpty()) persistence.importPosts(account, List.of());
+                if (fresh.isEmpty()) persistence.importPosts(account, List.of(), notify);
+                if (skipped > 0) {
+                    persistence.markFailure(account, skipped + " Instagram posts could not be collected");
+                }
                 created += accountCreated;
                 log.info("Instagram account finished: @{}, {} matching links, {} new notices",
                         account.username(), collected.get(account).size(), accountCreated);

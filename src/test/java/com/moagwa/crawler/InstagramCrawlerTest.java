@@ -12,7 +12,7 @@ class InstagramCrawlerTest {
     private final InstagramPostDetailsCollector details = mock(InstagramPostDetailsCollector.class);
     private final InstagramImageStorage storage = mock(InstagramImageStorage.class);
     private final InstagramPersistence persistence = mock(InstagramPersistence.class);
-    private final InstagramCrawlerProperties properties = new InstagramCrawlerProperties(true, null, null, 3, null, null, null, null);
+    private final InstagramCrawlerProperties properties = new InstagramCrawlerProperties(true, null, null, 3, null, null, null, null, null);
     private final InstagramCrawler crawler = new InstagramCrawler(catalog, links, properties, details, storage, persistence);
     private final InstagramAccountCatalog.InstagramAccount first = new InstagramAccountCatalog.InstagramAccount("첫 학과", "first", "https://www.instagram.com/first/");
     private final InstagramAccountCatalog.InstagramAccount second = new InstagramAccountCatalog.InstagramAccount("다음 학과", "second", "https://www.instagram.com/second/");
@@ -31,7 +31,7 @@ class InstagramCrawlerTest {
         var order = inOrder(links, persistence);
         order.verify(links).collect(List.of(first), 3);
         order.verify(persistence).newPostLinks(first, List.of(link));
-        order.verify(persistence).importPosts(eq(first), argThat(posts -> posts.size() == 1 && posts.get(0).imageUrls().equals(List.of("/uploads/a.jpg"))));
+        order.verify(persistence).importPosts(eq(first), argThat(posts -> posts.size() == 1 && posts.get(0).imageUrls().equals(List.of("/uploads/a.jpg"))), eq(true));
         order.verify(links).collect(List.of(second), 3);
     }
 
@@ -42,7 +42,7 @@ class InstagramCrawlerTest {
         when(persistence.newPostLinks(second, List.of())).thenReturn(List.of());
         crawler.crawl();
         verify(persistence).markFailure(eq(first), anyString());
-        verify(persistence).importPosts(second, List.of());
+        verify(persistence).importPosts(second, List.of(), true);
         verify(persistence, never()).markFailure(eq(second), anyString());
     }
 
@@ -63,22 +63,36 @@ class InstagramCrawlerTest {
         crawler.crawl();
         verify(details).collect(allLinks.subList(0, 150));
         verify(details).collect(allLinks.subList(150, 151));
-        verify(persistence).importPosts(eq(first), argThat(posts -> posts.size() == 150));
-        verify(persistence).importPosts(eq(first), argThat(posts -> posts.size() == 1));
+        verify(persistence).importPosts(eq(first), argThat(posts -> posts.size() == 150), eq(true));
+        verify(persistence).importPosts(eq(first), argThat(posts -> posts.size() == 1), eq(true));
         verify(persistence, never()).markFailure(any(), anyString());
     }
 
-    @Test void doesNotSavePostsWhoseDateCouldNotBeRead() {
+    @Test void skipsUndatedOrMissingPostsAndSavesTheRestOfTheBatch() {
         when(catalog.accounts()).thenReturn(List.of(first));
-        var link = new InstagramLinkCollector.InstagramPostLink("first", "TEST", "https://www.instagram.com/p/TEST/");
-        var undated = new InstagramPostDetailsCollector.InstagramPost("first", "TEST", "제목", link.url(), null, "본문",
-                List.of("https://cdn.example/a.jpg"));
-        when(links.collect(List.of(first), 3)).thenReturn(Map.of(first, List.of(link)));
-        when(persistence.newPostLinks(first, List.of(link))).thenReturn(List.of(link));
-        when(details.collect(List.of(link))).thenReturn(List.of(undated));
+        var dated = new InstagramLinkCollector.InstagramPostLink("first", "DATED", "https://www.instagram.com/p/DATED/");
+        var undated = new InstagramLinkCollector.InstagramPostLink("first", "UNDATED", "https://www.instagram.com/p/UNDATED/");
+        var missing = new InstagramLinkCollector.InstagramPostLink("first", "MISSING", "https://www.instagram.com/p/MISSING/");
+        var all = List.of(dated, undated, missing);
+        when(links.collect(List.of(first), 3)).thenReturn(Map.of(first, all));
+        when(persistence.newPostLinks(first, all)).thenReturn(all);
+        when(details.collect(all)).thenReturn(List.of(
+                new InstagramPostDetailsCollector.InstagramPost("first", "DATED", "제목", dated.url(), Instant.now(), "본문", List.of("https://cdn.example/a.jpg")),
+                new InstagramPostDetailsCollector.InstagramPost("first", "UNDATED", "제목", undated.url(), null, "본문", List.of("https://cdn.example/b.jpg"))));
+        when(storage.storeImages(anyList())).thenReturn(Map.of());
         crawler.crawl();
-        verify(persistence, never()).importPosts(eq(first), anyList());
-        verify(persistence).markFailure(eq(first), anyString());
+        verify(persistence).importPosts(eq(first), argThat(posts -> posts.size() == 1 && posts.get(0).externalId().equals("DATED")), eq(true));
+        verify(persistence).markFailure(eq(first), contains("2 Instagram posts"));
+    }
+
+    @Test void dateBackfillDoesNotSendNewNoticeAlerts() {
+        var backfill = new InstagramCrawler(catalog, links, new InstagramCrawlerProperties(true, null, null, 3, null, null, null, null,
+                java.time.LocalDate.parse("2026-10-06")), details, storage, persistence);
+        when(catalog.accounts()).thenReturn(List.of(first));
+        when(links.collect(List.of(first), 3)).thenReturn(Map.of(first, List.of()));
+        when(persistence.newPostLinks(first, List.of())).thenReturn(List.of());
+        backfill.crawl();
+        verify(persistence).importPosts(first, List.of(), false);
     }
 
     @Test void stopsFurtherRequestsWhenInstagramRateLimitsTheRun() {

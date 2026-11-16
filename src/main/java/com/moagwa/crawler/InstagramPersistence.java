@@ -50,7 +50,7 @@ class InstagramPersistence {
     }
 
     @Transactional
-    int importPosts(InstagramAccount account, List<InstagramPost> posts) {
+    int importPosts(InstagramAccount account, List<InstagramPost> posts, boolean notify) {
         CrawlSource source = sourceFor(account);
         boolean firstCrawl = source.isFirstCrawl();
         Map<String, InstagramPost> uniquePosts = uniquePosts(posts);
@@ -72,7 +72,7 @@ class InstagramPersistence {
             notice.assignImages(post.imageUrls());
             CrawledNotice saved = notices.save(notice);
             created++;
-            if (!firstCrawl) {
+            if (notify && !firstCrawl) {
                 events.publishEvent(new CrawledNoticeCreatedEvent(saved.getId(), source.getId(),
                         source.getOrganization().getId(), saved.getTitle()));
             }
