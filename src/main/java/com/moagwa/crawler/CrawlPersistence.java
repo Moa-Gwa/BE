@@ -50,7 +50,7 @@ class CrawlPersistence {
             notice.assignBoardMedia(content.thumbnailUrl(), content.attachments());
         }
         CrawledNotice saved = notices.saveAndFlush(notice);
-        // Register the event before commit so transaction-bound notification listeners can receive it.
+        // 커밋 후 리스너가 받도록 트랜잭션 안에서 이벤트 등록
         if (notifySubscribers) {
             var source = saved.getSource();
             events.publishEvent(new CrawledNoticeCreatedEvent(saved.getId(), source.getId(),
