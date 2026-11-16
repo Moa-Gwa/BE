@@ -64,10 +64,6 @@ function escapeRegExp(value) {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function shortcodeFromAnyPostUrl(value) {
-    return typeof value === 'string' ? value.match(/\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/)?.[1] ?? null : null;
-}
-
 /**
  * Pulls canonical image fields from the page's embedded post payload. Instagram changes its page
  * markup frequently, so metadata passed from the rendered document is included as a safe fallback.

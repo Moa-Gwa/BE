@@ -51,7 +51,9 @@ class InstagramLinkCollector {
             String stdout = collectedOutput.join();
             String stderr = collectedError.join();
             if (process.exitValue() != 0) {
-                throw new IllegalStateException("Instagram profile link collector failed: " + trim(stderr));
+                // 300자로 자르면 표식이 잘려 나가므로 전체 출력에서 확인
+                throw new IllegalStateException("Instagram profile link collector failed: "
+                        + (stderr.contains("INSTAGRAM_RATE_LIMIT") ? "INSTAGRAM_RATE_LIMIT" : trim(stderr)));
             }
             Output output = objectMapper.readValue(stdout, Output.class);
             Map<String, List<InstagramPostLink>> byUsername = new LinkedHashMap<>();

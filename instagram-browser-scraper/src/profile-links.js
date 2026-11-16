@@ -1,5 +1,5 @@
 const INSTAGRAM_POST_URL = /^(?:https?:\/\/(?:www\.)?instagram\.com)?\/(?:[A-Za-z0-9._]+\/)?(p|reel|tv)\/([A-Za-z0-9_-]+)\/?(?:[?#].*)?$/i;
-import { extractPublishedAt, shortcodeFromAnyPostUrl } from './instagram.js';
+import { extractPublishedAt, shortcodeFromUrl } from './instagram.js';
 
 /** Scan past pinned posts before stopping at an older chronological grid segment. */
 export async function collectProfilePostLinksSince(page, since, readDate) {
@@ -43,7 +43,7 @@ export async function readPostPublishedAt(context, url) {
         if (response?.status() === 429) throw new Error('INSTAGRAM_RATE_LIMIT: pause before retrying');
         await page.locator('meta[property="og:description"]').waitFor({ state: 'attached', timeout: 10_000 });
         const datetime = await page.evaluate(() => document.querySelector('time[datetime]')?.getAttribute('datetime'));
-        return extractPublishedAt(datetime, await page.content(), shortcodeFromAnyPostUrl(url));
+        return extractPublishedAt(datetime, await page.content(), shortcodeFromUrl(url));
     } finally {
         await page.close();
         await new Promise(resolve => setTimeout(resolve, 2000));

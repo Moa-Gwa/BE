@@ -9,6 +9,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InstagramPostDetailsCollectorTest {
     @TempDir Path temp;
@@ -46,5 +47,16 @@ class InstagramPostDetailsCollectorTest {
         assertThat(posts).hasSize(1);
         assertThat(posts.get(0).caption()).isEqualTo(caption.strip());
         assertThat(posts.get(0).imageUrls()).containsExactly("https://cdn.example/image.jpg");
+    }
+
+    @Test void reportsRateLimitEvenWhenTheMarkerIsBeyondTheTrimmedError() throws Exception {
+        Path script = temp.resolve("limited.sh");
+        Files.writeString(script, "cat >/dev/null\nprintf '%0400d\\nError: INSTAGRAM_RATE_LIMIT\\n' 0 >&2\nexit 1\n");
+        var properties = new InstagramCrawlerProperties(true, null, null, 3, "/bin/sh", null,
+                script.toString(), Duration.ofSeconds(10), null);
+        var collector = new InstagramPostDetailsCollector(new ObjectMapper(), properties);
+        assertThatThrownBy(() -> collector.collect(List.of(
+                new InstagramLinkCollector.InstagramPostLink("test", "TEST", "https://www.instagram.com/p/TEST/"))))
+                .hasMessageContaining("INSTAGRAM_RATE_LIMIT");
     }
 }
