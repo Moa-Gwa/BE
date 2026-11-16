@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +25,7 @@ class CrawlPersistence {
 
     private final CrawlSourceRepository sources;
     private final CrawledNoticeRepository notices;
+    private final ApplicationEventPublisher events;
 
     @Transactional(readOnly = true)
     public Set<String> findExistingExternalIds(Long sourceId, Collection<String> externalIds) {
@@ -42,12 +44,19 @@ class CrawlPersistence {
 
     /** Throws DataIntegrityViolationException if (source, externalId) already exists. */
     @Transactional
-    public CrawledNotice saveNew(CrawledNotice notice, DetailContent content) {
+    public CrawledNotice saveNew(CrawledNotice notice, DetailContent content, boolean notifySubscribers) {
         if (content != null) {
             notice.applyContent(content.html(), content.text());
             notice.assignBoardMedia(content.thumbnailUrl(), content.attachments());
         }
-        return notices.saveAndFlush(notice);
+        CrawledNotice saved = notices.saveAndFlush(notice);
+        // 커밋 후 리스너가 받도록 트랜잭션 안에서 이벤트 등록
+        if (notifySubscribers) {
+            var source = saved.getSource();
+            events.publishEvent(new CrawledNoticeCreatedEvent(saved.getId(), source.getId(),
+                    source.getOrganization().getId(), saved.getTitle()));
+        }
+        return saved;
     }
 
     @Transactional
