@@ -2,6 +2,7 @@ package com.moagwa.admin;
 
 import com.moagwa.admin.AdminApplicationDto.ApplicationForm;
 import com.moagwa.admin.AdminApplicationDto.ApplicationView;
+import com.moagwa.admin.AdminApplicationDto.Approval;
 import com.moagwa.admin.AdminApplicationDto.Approved;
 import com.moagwa.admin.AdminApplicationDto.PasswordSetup;
 import com.moagwa.admin.AdminApplicationDto.Rejected;
@@ -43,8 +44,8 @@ class AdminApplicationController {
     }
 
     @PostMapping("/admin/applications/{id}/approve")
-    Approved approve(@PathVariable long id) {
-        return service.approve(id);
+    Approved approve(@PathVariable long id, @Valid @RequestBody(required = false) Approval body) {
+        return service.approve(id, body == null ? null : body.organizationName());
     }
 
     @PostMapping("/admin/applications/{id}/resend-setup")

@@ -96,6 +96,19 @@ class AdminApplicationTest {
     }
 
     @Test
+    void operatorCanFixOrganizationNameWhenApproving() throws Exception {
+        long id = submit("rename-" + tag + "@catholic.ac.kr");
+        String fixed = "철학과 학생회 " + tag;
+
+        mvc.perform(post("/api/admin/applications/" + id + "/approve").header("Authorization", operator)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"organizationName\":\"  " + fixed + " \"}"))
+                .andExpect(status().isOk());
+
+        Long orgId = jdbc.queryForObject("SELECT organization_id FROM admin_applications WHERE id = ?", Long.class, id);
+        assertThat(organizations.findById(orgId).orElseThrow().getName()).isEqualTo(fixed);
+    }
+
+    @Test
     void expiredSetupLinkCannotBeUsedUntilOperatorResendsIt() throws Exception {
         long id = submit("late-" + tag + "@catholic.ac.kr");
         String token = body(mvc.perform(post("/api/admin/applications/" + id + "/approve")
