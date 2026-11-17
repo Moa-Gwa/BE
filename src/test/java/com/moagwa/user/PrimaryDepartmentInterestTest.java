@@ -39,13 +39,16 @@ class PrimaryDepartmentInterestTest {
     @Autowired OrganizationRepository organizations;
 
     private String token;
+    private long other;
 
     @BeforeEach
     void setUp() {
-        // 학과 학생회는 운영 중 인스타 수집, 관리자 신청 승인으로 생기므로 테스트에서 만듦
-        for (String name : List.of("총학생회", "철학과 학생회", "영어영문학부 학생회", "국사학과 학생회", "경영학과 학생회")) {
+        // 학과 학생회는 운영 중 인스타 수집, 관리자 신청 승인으로 생김. 인스타 스냅샷 가져오기 테스트와 겹치지 않게
+        // 스냅샷에 없는 학과의 학생회만 만듦
+        for (String name : List.of("한국문화학과 학생회", "글로벌비즈니스학과 학생회")) {
             organizations.findByName(name).orElseGet(() -> organizations.save(new Organization(name, OrganizationType.STUDENT_GOVERNMENT)));
         }
+        other = organizations.save(new Organization("기타 단체 " + UUID.randomUUID(), OrganizationType.STUDENT_GOVERNMENT)).getId();
         User me = users.save(new User("DEV", "dept-" + UUID.randomUUID(), "학생"));
         token = "Bearer " + jwt.issueStudent(me.getId());
     }
@@ -75,23 +78,22 @@ class PrimaryDepartmentInterestTest {
 
     @Test
     void choosingAndChangingPrimaryDepartmentSyncsDepartmentAndCouncil() throws Exception {
-        long philosophy = id("철학과"), philosophyCouncil = id("철학과 학생회");
-        long english = id("영어영문학과"), englishCouncil = id("영어영문학부 학생회");
-        long other = id("총학생회");
+        long first = id("한국문화학과"), firstCouncil = id("한국문화학과 학생회");
+        long second = id("글로벌비즈니스학과"), secondCouncil = id("글로벌비즈니스학과 학생회");
 
-        JsonNode first = save(philosophy, List.of(), List.of(other));
-        assertThat(ids(first, "departmentIds")).containsExactly(philosophy);
-        assertThat(ids(first, "organizationIds")).containsExactlyInAnyOrder(other, philosophyCouncil);
+        JsonNode chosen = save(first, List.of(), List.of(other));
+        assertThat(ids(chosen, "departmentIds")).containsExactly(first);
+        assertThat(ids(chosen, "organizationIds")).containsExactlyInAnyOrder(other, firstCouncil);
 
         // 같은 주전공으로 다시 저장하면 학생이 해제한 학생회는 다시 붙지 않음
-        JsonNode unchecked = save(philosophy, List.of(philosophy), List.of(other));
+        JsonNode unchecked = save(first, List.of(first), List.of(other));
         assertThat(ids(unchecked, "organizationIds")).containsExactly(other);
 
         // 주전공을 바꾸면 예전 학과와 학생회는 빠지고 새 학과와 학생회가 들어감
-        save(philosophy, List.of(philosophy), List.of(other, philosophyCouncil));
-        JsonNode changed = save(english, List.of(philosophy), List.of(other, philosophyCouncil));
-        assertThat(ids(changed, "departmentIds")).containsExactly(english);
-        assertThat(ids(changed, "organizationIds")).containsExactlyInAnyOrder(other, englishCouncil);
+        save(first, List.of(first), List.of(other, firstCouncil));
+        JsonNode changed = save(second, List.of(first), List.of(other, firstCouncil));
+        assertThat(ids(changed, "departmentIds")).containsExactly(second);
+        assertThat(ids(changed, "organizationIds")).containsExactlyInAnyOrder(other, secondCouncil);
     }
 
     @Test
@@ -108,12 +110,19 @@ class PrimaryDepartmentInterestTest {
     void departmentListShowsLinkedCouncilAndRenamedDepartment() throws Exception {
         String body = mvc.perform(get("/api/organizations").param("type", "DEPARTMENT"))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        JsonNode list = json.readTree(body);
         Map<String, JsonNode> byName = new HashMap<>();
-        list.forEach(o -> byName.put(o.get("name").asText(), o));
+        json.readTree(body).forEach(o -> byName.put(o.get("name").asText(), o));
 
         assertThat(byName).containsKey("국사학과").doesNotContainKey("사학과");
-        assertThat(byName.get("국사학과").get("studentGovernmentId").asLong()).isEqualTo(id("국사학과 학생회"));
-        assertThat(byName.get("경영학부").get("studentGovernmentId").asLong()).isEqualTo(id("경영학과 학생회"));
+        assertThat(byName.get("한국문화학과").get("studentGovernmentId").asLong()).isEqualTo(id("한국문화학과 학생회"));
+        assertThat(byName.get("교직과").get("studentGovernmentId").isNull()).isTrue();
+    }
+
+    @Test
+    void councilNamesFollowTheDepartmentNameExceptForKnownPairs() {
+        assertThat(Organization.councilNameOf("철학과")).isEqualTo("철학과 학생회");
+        assertThat(Organization.councilNameOf("국사학과")).isEqualTo("국사학과 학생회");
+        assertThat(Organization.councilNameOf("영어영문학과")).isEqualTo("영어영문학부 학생회");
+        assertThat(Organization.councilNameOf("경영학부")).isEqualTo("경영학과 학생회");
     }
 }
