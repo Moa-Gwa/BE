@@ -49,4 +49,30 @@ class AdminSetupMailer {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "설정 메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.");
         }
     }
+
+    /** 반려 안내 메일. 보냈으면 true, 메일 설정이 없거나 발송에 실패하면 false(반려는 그대로 유지) */
+    boolean sendRejection(String toEmail, String reason) {
+        JavaMailSender sender = mailSender.getIfAvailable();
+        if (sender == null) {
+            return false;
+        }
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setFrom(from);
+        message.setTo(toEmail);
+        message.setSubject("[모아과] 단체 관리자 신청 반려 안내");
+        message.setText("""
+                모아과 단체 관리자 신청이 반려되었습니다.
+
+                반려 사유: %s
+
+                내용을 보완해 다시 신청해 주세요.
+                """.formatted(reason == null || reason.isBlank() ? "(사유 없음)" : reason));
+        try {
+            sender.send(message);
+            return true;
+        } catch (MailException e) {
+            log.warn("단체 관리자 신청 반려 메일 발송 실패: to={}", toEmail, e);
+            return false;
+        }
+    }
 }

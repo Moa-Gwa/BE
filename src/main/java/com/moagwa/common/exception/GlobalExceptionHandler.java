@@ -16,10 +16,14 @@ class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    ResponseEntity<Map<String, String>> handleValidation(MethodArgumentNotValidException e) {
+    ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(f -> f.getField() + ": " + f.getDefaultMessage())
                 .collect(Collectors.joining(", "));
-        return ResponseEntity.badRequest().body(Map.of("message", message));
+        // 항목별 오류 메시지. 한 항목에 여러 오류가 있으면 첫 번째만 씀
+        Map<String, String> errors = e.getBindingResult().getFieldErrors().stream()
+                .collect(Collectors.toMap(f -> f.getField(), f -> String.valueOf(f.getDefaultMessage()),
+                        (first, second) -> first));
+        return ResponseEntity.badRequest().body(Map.of("message", message, "errors", errors));
     }
 }
