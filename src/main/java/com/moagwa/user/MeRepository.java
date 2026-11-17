@@ -139,4 +139,31 @@ class MeRepository {
     private static MapSqlParameterSource bookmark(long userId, String source, long noticeId) {
         return new MapSqlParameterSource().addValue("u", userId).addValue("s", source).addValue("n", noticeId);
     }
+
+    /** 다른 학생과 진행 중인 거래가 있으면 탈퇴하지 못함. 지우면 상대의 거래, 결제, 채팅이 함께 사라지기 때문 */
+    boolean hasOngoingTrade(long userId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM group_buys g
+                                WHERE g.status = 'RECRUITING' AND g.deadline_at > now()
+                                  AND (g.host_id = :u OR EXISTS (SELECT 1 FROM group_buy_participants p
+                                                                  WHERE p.group_buy_id = g.id AND p.user_id = :u)))
+                    OR EXISTS (SELECT 1 FROM market_requests r JOIN market_items i ON i.id = r.item_id
+                                WHERE r.status IN ('PENDING', 'ACCEPTED') AND (r.buyer_id = :u OR i.seller_id = :u))
+                    OR EXISTS (SELECT 1 FROM group_buy_payments p LEFT JOIN group_buys g ON g.id = p.group_buy_id
+                                WHERE p.status IN ('APPROVING', 'CANCELING') AND (p.user_id = :u OR g.host_id = :u))
+                    -- 환불은 같이 사기 행으로 대상을 찾으므로, 개설자가 지우면 환불 대기 결제가 환불되지 않음
+                    OR EXISTS (SELECT 1 FROM group_buy_payments p JOIN group_buys g ON g.id = p.group_buy_id
+                                WHERE p.status = 'PAID' AND g.host_id = :u
+                                  AND (g.status = 'CANCELED' OR (g.status = 'RECRUITING'
+                                       AND (SELECT COALESCE(sum(q.quantity), 0) FROM group_buy_participants q
+                                             WHERE q.group_buy_id = g.id) < g.target_quantity)))
+                """, new MapSqlParameterSource("u", userId), Boolean.class));
+    }
+
+    /** 사용자 행을 지우면 연관 데이터는 FK의 ON DELETE CASCADE로 지워지고 결제 기록만 연결이 끊긴 채 남음 */
+    void deleteUser(long userId) {
+        var u = new MapSqlParameterSource("u", userId);
+        jdbc.update("DELETE FROM refresh_sessions WHERE principal_id = :u AND role = 'STUDENT'", u);
+        jdbc.update("DELETE FROM users WHERE id = :u", u);
+    }
 }

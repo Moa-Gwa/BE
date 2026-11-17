@@ -235,7 +235,7 @@ class AdminApplicationTest {
                 "organizationName", "총학생회-" + tag, "university", "가톨릭대학교", "department", "총학생회",
                 "contactName", "담당자", "email", email, "phone", "010-0000-0000",
                 "channelUrl", "https://example.com/council", "reason", "공지 게시용 계정 신청",
-                "loginId", loginId));
+                "loginId", loginId, "privacyAgreed", "true"));
     }
 
     private ResultActions submitRequest(Map<String, String> form) throws Exception {

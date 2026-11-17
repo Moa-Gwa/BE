@@ -7,6 +7,7 @@ import com.moagwa.admin.Admin;
 import com.moagwa.admin.AdminRepository;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.user.User;
+import com.moagwa.user.ConsentRepository;
 import com.moagwa.user.UserRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
@@ -44,6 +45,7 @@ class AuthController {
 
     private final AdminRepository admins;
     private final UserRepository users;
+    private final ConsentRepository consents;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
     private final AuthCookies cookies;
@@ -185,6 +187,7 @@ class AuthController {
     static class DevAuthController {
 
         private final UserRepository users;
+        private final ConsentRepository consents;
         private final JwtService jwt;
         private final RefreshSessions refreshSessions;
 
@@ -193,8 +196,9 @@ class AuthController {
         StudentSession devStudent(@Valid @RequestBody DevLogin body, HttpServletResponse response) {
             User user = users.findByAuthProviderAndProviderUserId("DEV", body.nickname())
                     .orElseGet(() -> users.save(new User("DEV", body.nickname(), body.nickname())));
-            refreshSessions.start(jwt.issueStudent(user.getId(), user.isVerified()), response);
-            return StudentSession.of(user);
+            boolean consented = consents.hasCurrentConsent(user.getId());
+            refreshSessions.start(jwt.issueStudent(user, consented), response);
+            return StudentSession.of(user, consented);
         }
     }
 
@@ -204,8 +208,9 @@ class AuthController {
     }
 
     private StudentSession session(User user, HttpServletResponse response) {
-        refreshSessions.start(jwt.issueStudent(user.getId(), user.isVerified()), response);
-        return StudentSession.of(user);
+        boolean consented = consents.hasCurrentConsent(user.getId());
+        refreshSessions.start(jwt.issueStudent(user, consented), response);
+        return StudentSession.of(user, consented);
     }
 
     record AdminLogin(@NotBlank String loginId, @NotBlank String password) {
@@ -228,9 +233,11 @@ class AuthController {
     record AdminSession(String name, OrgInfo organization, boolean operator) {
     }
 
-    record StudentSession(String nickname, boolean onboarded, boolean verified) {
-        static StudentSession of(User user) {
-            return new StudentSession(user.getNickname(), user.getPrimaryDepartmentId() != null, user.isVerified());
+    /** consented = 현재 버전 약관에 동의함. false면 동의 화면부터 보여 줌 */
+    record StudentSession(String nickname, boolean onboarded, boolean verified, boolean consented) {
+        static StudentSession of(User user, boolean consented) {
+            return new StudentSession(user.getNickname(), user.getPrimaryDepartmentId() != null, user.isVerified(),
+                    consented);
         }
     }
 }
