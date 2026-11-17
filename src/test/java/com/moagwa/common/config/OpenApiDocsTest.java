@@ -22,6 +22,9 @@ class OpenApiDocsTest {
         mvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.servers[0].url").value("/"))
+                .andExpect(jsonPath("$.paths['/api/categories'].get.summary").value("공지 카테고리 목록 조회"))
+                .andExpect(jsonPath("$.paths['/api/crawled-notices/{id}'].get.description").isNotEmpty())
+                .andExpect(jsonPath("$.paths['/api/admin/notices'].post.summary").value("관리자 공지 작성"))
                 .andExpect(jsonPath("$.paths['/api/auth/dev-student']").doesNotExist());
     }
 
