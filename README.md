@@ -160,7 +160,6 @@ scripts/run-local.sh
 기본 `local` 프로필에서는 테스트용 관리자 계정이 생성.
 
 - `student-council`
-- `ai-council`
 - `cs-council`
 - 비밀번호: `moagwa1234`
 
