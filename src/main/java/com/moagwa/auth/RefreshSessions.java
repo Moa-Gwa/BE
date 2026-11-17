@@ -1,10 +1,7 @@
 package com.moagwa.auth;
 
-import com.moagwa.admin.Admin;
 import com.moagwa.admin.AdminRepository;
 import com.moagwa.common.exception.ApiException;
-import com.moagwa.organization.Organization;
-import com.moagwa.organization.OrganizationRepository;
 import com.moagwa.user.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -33,19 +30,16 @@ public class RefreshSessions {
     private final AuthCookies cookies;
     private final UserRepository users;
     private final AdminRepository admins;
-    private final OrganizationRepository organizations;
     private final List<String> operatorIds;
     private final SecureRandom random = new SecureRandom();
 
     RefreshSessions(JdbcTemplate jdbc, JwtService jwt, AuthCookies cookies, UserRepository users,
-                    AdminRepository admins, OrganizationRepository organizations,
-                    @Value("${moagwa.operator-login-ids:}") List<String> operatorIds) {
+                    AdminRepository admins, @Value("${moagwa.operator-login-ids:}") List<String> operatorIds) {
         this.jdbc = jdbc;
         this.jwt = jwt;
         this.cookies = cookies;
         this.users = users;
         this.admins = admins;
-        this.organizations = organizations;
         this.operatorIds = operatorIds;
     }
 
@@ -80,7 +74,6 @@ public class RefreshSessions {
                     .orElseThrow(RefreshSessions::unauthorized);
             boolean operator = admin.isOperator() || operatorIds.stream().map(String::trim)
                     .anyMatch(admin.getLoginId()::equals);
-            moveOperator(admin, operator);
             access = jwt.issueAdmin(admin.getId(), admin.getOrganization().getId(), operator);
         }
         Duration remaining = Duration.between(Instant.now(), session.expiresAt());
@@ -91,13 +84,6 @@ public class RefreshSessions {
                 java.sql.Timestamp.from(session.expiresAt()));
         cookies.issue(response, access);
         cookies.issueRefresh(response, next, remaining);
-    }
-
-    /** 마이그레이션 이후 운영자가 된 계정도 운영자 단체로 옮겨 그 계정의 공지가 모든 학생에게 가도록 함 */
-    void moveOperator(Admin admin, boolean operator) {
-        if (operator && !admin.getOrganization().isRequired()) {
-            organizations.findByName(Organization.OPERATOR_NAME).ifPresent(admin::moveTo);
-        }
     }
 
     public void revoke(HttpServletRequest request) {

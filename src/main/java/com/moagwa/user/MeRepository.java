@@ -25,12 +25,6 @@ class MeRepository {
                 new MapSqlParameterSource().addValue("u", userId).addValue("k", kind), Long.class);
     }
 
-    /** 구독 해제할 수 없는 단체(운영자 등) */
-    List<Long> requiredOrganizations() {
-        return jdbc.queryForList("SELECT id FROM organizations WHERE is_required ORDER BY id",
-                new MapSqlParameterSource(), Long.class);
-    }
-
     void deleteInterests(long userId) {
         jdbc.update("DELETE FROM user_interests WHERE user_id = :u", new MapSqlParameterSource("u", userId));
     }

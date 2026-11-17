@@ -211,7 +211,7 @@ class ApiIntegrationTest {
         mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("nickname", "민지", "organizationIds",
-                                withOperator(council.getId()), "categoryIds", List.of()))))
+                                List.of(council.getId()), "categoryIds", List.of()))))
                 .andExpect(status().isOk());
         long id = createNotice(admin, Map.of("title", "관심단체공지 " + tag)).get("id").asLong();
         createNotice(otherAdmin, Map.of("title", "무관공지 " + tag));
@@ -241,7 +241,7 @@ class ApiIntegrationTest {
     void studentReadsNotificationsAndKeepsNotificationSettings() throws Exception {
         mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("organizationIds", withOperator(council.getId())))))
+                        .content(json.writeValueAsString(Map.of("organizationIds", List.of(council.getId())))))
                 .andExpect(status().isOk());
         createNotice(admin, Map.of("title", "알림1 " + tag));
         createNotice(admin, Map.of("title", "알림2 " + tag));
@@ -611,6 +611,11 @@ class ApiIntegrationTest {
         Organization operatorOrg = operatorOrganization();
         Admin operator = admins.save(new Admin("op-" + tag, encoder.encode("pw-1234"), "운영자", operatorOrg));
 
+        // 운영자 단체를 관심 단체에 넣지 않고 저장해도 운영자 공지는 받음
+        mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("organizationIds", List.of(council.getId())))))
+                .andExpect(status().isOk());
         long id = createNotice(operator, Map.of("title", "운영공지 " + tag)).get("id").asLong();
         try {
             mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.organization.name").value("운영자"));
@@ -626,14 +631,7 @@ class ApiIntegrationTest {
     }
 
     @Test
-    void studentsCannotUnsubscribeFromTheOperatorOrganization() throws Exception {
-        long operatorId = operatorOrganization().getId();
-        mvc.perform(get("/api/me/profile").header("Authorization", studentToken()))
-                .andExpect(jsonPath("$.organizationIds[0]").value(operatorId));
-        mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("organizationIds", List.of(council.getId())))))
-                .andExpect(status().isBadRequest());
+    void organizationsListMarksOperatorAsRequired() throws Exception {
         mvc.perform(get("/api/organizations").param("q", "운영자"))
                 .andExpect(jsonPath("$[0].name").value("운영자"))
                 .andExpect(jsonPath("$[0].required").value(true));
@@ -643,9 +641,5 @@ class ApiIntegrationTest {
 
     private Organization operatorOrganization() {
         return organizations.findByName(Organization.OPERATOR_NAME).orElseThrow();
-    }
-
-    private List<Long> withOperator(long organizationId) {
-        return List.of(operatorOrganization().getId(), organizationId);
     }
 }

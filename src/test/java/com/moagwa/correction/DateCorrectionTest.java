@@ -142,11 +142,7 @@ class DateCorrectionTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"loginId\":\"" + CONFIGURED_OPERATOR + "\",\"password\":\"pw-1234\"}"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.operator").value(true))
-                    .andExpect(jsonPath("$.organization.name").value(Organization.OPERATOR_NAME));
-            // 마이그레이션 이후 설정으로 운영자가 된 계정도 운영자 단체로 옮겨져 공지가 모든 학생에게 감
-            assertThat(jdbc.queryForObject("SELECT o.is_required FROM admins a JOIN organizations o"
-                    + " ON o.id = a.organization_id WHERE a.id = ?", Boolean.class, configured.getId())).isTrue();
+                    .andExpect(jsonPath("$.operator").value(true));
             mvc.perform(post("/api/admin/auth/login").header("X-Requested-With", "fetch")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"loginId\":\"op-x\",\"password\":\"x\"}"))

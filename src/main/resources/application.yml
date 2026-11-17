@@ -8,9 +8,6 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
-    # 운영자 단체 이전 마이그레이션(V31)이 설정으로 지정된 운영자 아이디도 함께 옮김
-    placeholders:
-      "[operator_login_ids]": ${moagwa.operator-login-ids:}
   servlet:
     multipart:
       max-file-size: 5MB
