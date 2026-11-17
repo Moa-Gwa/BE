@@ -4,6 +4,7 @@ import static org.springframework.security.config.Customizer.withDefaults;
 
 import java.util.ArrayList;
 import java.util.List;
+import com.moagwa.user.User;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,7 +34,8 @@ class SecurityConfig {
         converter.setJwtGrantedAuthoritiesConverter(jwtToken -> {
             List<GrantedAuthority> granted = new ArrayList<>();
             String role = jwtToken.getClaimAsString("role");
-            if ("STUDENT".equals(role) && !Boolean.TRUE.equals(jwtToken.getClaim("consented"))) {
+            if ("STUDENT".equals(role) && (!Boolean.TRUE.equals(jwtToken.getClaim("consented"))
+                    || !User.TERMS_VERSION.equals(jwtToken.getClaimAsString("consentVersion")))) {
                 return List.of(new SimpleGrantedAuthority("ROLE_UNCONSENTED"));
             }
             if (role != null) {

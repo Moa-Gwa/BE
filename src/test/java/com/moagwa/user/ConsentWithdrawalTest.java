@@ -27,19 +27,19 @@ class ConsentWithdrawalTest {
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
     @Autowired UserRepository users;
+    @Autowired ConsentRepository consents;
     @Autowired JwtService jwt;
     @Autowired PrivacyRetention retention;
 
     private User user(boolean consented) {
         var u = new User("DEV", UUID.randomUUID().toString(), "동의");
-        if (consented) {
-            u.consent();
-        }
-        return users.save(u);
+        u = users.save(u);
+        if (consented) consents.agreeCurrent(u.getId());
+        return u;
     }
 
     private String bearer(User u) {
-        return "Bearer " + jwt.issueStudent(u);
+        return "Bearer " + jwt.issueStudent(u, consents.hasCurrentConsent(u.getId()));
     }
 
     private long count(String sql, Object... args) {
@@ -49,6 +49,9 @@ class ConsentWithdrawalTest {
     @Test void unconsentedStudentCanOnlyUseConsentApiUntilAgreeing() throws Exception {
         User u = user(false);
         mvc.perform(get("/api/me/profile").header("Authorization", bearer(u))).andExpect(status().isForbidden());
+        mvc.perform(post("/api/me/verification/email").header("Authorization", bearer(u))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"email\":\"student@catholic.ac.kr\"}"))
+                .andExpect(status().isForbidden());
         mvc.perform(get("/api/me/consent").header("Authorization", bearer(u)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.required").value(true))
                 .andExpect(jsonPath("$.version").value(User.TERMS_VERSION));
@@ -65,7 +68,22 @@ class ConsentWithdrawalTest {
 
         Cookie session = response.getCookie(AuthCookies.NAME);
         mvc.perform(get("/api/me/profile").cookie(session)).andExpect(status().isOk());
-        assertThat(count("SELECT count(*) FROM users WHERE id = ? AND terms_agreed_at IS NOT NULL", u.getId())).isOne();
+        assertThat(count("SELECT count(*) FROM user_consents WHERE user_id = ?", u.getId())).isEqualTo(2);
+    }
+
+    @Test void agreeingToTheSameVersionKeepsTheOriginalAuditTimestamp() throws Exception {
+        User u = user(true);
+        var before = jdbc.queryForObject("SELECT agreed_at FROM user_consents WHERE user_id = ? AND document_type = 'TERMS'",
+                java.sql.Timestamp.class, u.getId());
+
+        mvc.perform(put("/api/me/consent").header("Authorization", bearer(u)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"version\":\"%s\",\"terms\":true,\"privacy\":true}".formatted(User.TERMS_VERSION)))
+                .andExpect(status().isOk());
+
+        var after = jdbc.queryForObject("SELECT agreed_at FROM user_consents WHERE user_id = ? AND document_type = 'TERMS'",
+                java.sql.Timestamp.class, u.getId());
+        assertThat(after).isEqualTo(before);
+        assertThat(count("SELECT count(*) FROM user_consents WHERE user_id = ?", u.getId())).isEqualTo(2);
     }
 
     @Test void withdrawalDeletesPersonalDataAndDetachesPaymentRecords() throws Exception {

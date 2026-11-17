@@ -42,9 +42,9 @@ public class JwtService {
         return decoder;
     }
 
-    /** 로그인, 토큰 갱신용. 재학생 인증과 약관 동의 여부를 DB의 사용자 상태에서 읽음 */
-    public String issueStudent(User user) {
-        return issue(user.getId(), "STUDENT", null, user.isVerified(), false, user.hasConsented());
+    /** 로그인, 토큰 갱신용. 호출자가 동의 이력에서 확인한 상태만 토큰에 넣는다. */
+    public String issueStudent(User user, boolean consented) {
+        return issue(user.getId(), "STUDENT", null, user.isVerified(), false, consented);
     }
 
     /** 약관에 동의한 학생 토큰. 동의한 학생만 부르는 API(재학생 인증 등)와 테스트에서 씀 */
@@ -85,6 +85,7 @@ public class JwtService {
         }
         if (consented) {
             claims.claim("consented", true);
+            claims.claim("consentVersion", User.TERMS_VERSION);
         }
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims.build()))
                 .getTokenValue();

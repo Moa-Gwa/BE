@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moagwa.auth.AuthCookies;
 import com.moagwa.auth.JwtService;
+import com.moagwa.user.ConsentRepository;
 import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
 import jakarta.servlet.http.Cookie;
@@ -46,6 +47,7 @@ class MarketApiIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired JwtService jwt;
     @Autowired UserRepository users;
+    @Autowired ConsentRepository consents;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
 
@@ -95,6 +97,7 @@ class MarketApiIntegrationTest {
     @Test
     void emailVerificationIssuesVerifiedToken() throws Exception {
         User plain = users.save(new User("DEV", "plain2-" + tag, "plain2-" + tag));
+        consents.agreeCurrent(plain.getId());
         String auth = "Bearer " + jwt.issueStudent(plain.getId());
         String email = "student" + tag + "@catholic.ac.kr";
 

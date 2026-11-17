@@ -1,6 +1,8 @@
 package com.moagwa.market;
 
 import com.moagwa.auth.JwtService;
+import com.moagwa.user.ConsentRepository;
+import com.moagwa.user.UserRepository;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.market.StudentVerificationRepository.Pending;
 import com.moagwa.market.VerificationDto.SendResult;
@@ -29,6 +31,8 @@ class VerificationService {
     private final StudentVerificationRepository verifications;
     private final PasswordEncoder encoder;
     private final JwtService jwt;
+    private final UserRepository users;
+    private final ConsentRepository consents;
     private final VerificationMailSender mail;
     private final SecureRandom random = new SecureRandom();
 
@@ -91,7 +95,7 @@ class VerificationService {
             throw emailTaken();
         }
         verifications.markVerified(me);
-        return jwt.issueStudent(me, true);
+        return jwt.issueStudent(users.findById(me).orElseThrow(), consents.hasCurrentConsent(me));
     }
 
     private void requireSchoolEmail(String email) {

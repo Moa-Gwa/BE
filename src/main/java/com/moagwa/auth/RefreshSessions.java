@@ -3,6 +3,7 @@ package com.moagwa.auth;
 import com.moagwa.admin.AdminRepository;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.user.UserRepository;
+import com.moagwa.user.ConsentRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
@@ -29,16 +30,18 @@ public class RefreshSessions {
     private final JwtService jwt;
     private final AuthCookies cookies;
     private final UserRepository users;
+    private final ConsentRepository consents;
     private final AdminRepository admins;
     private final List<String> operatorIds;
     private final SecureRandom random = new SecureRandom();
 
-    RefreshSessions(JdbcTemplate jdbc, JwtService jwt, AuthCookies cookies, UserRepository users,
+    RefreshSessions(JdbcTemplate jdbc, JwtService jwt, AuthCookies cookies, UserRepository users, ConsentRepository consents,
                     AdminRepository admins, @Value("${moagwa.operator-login-ids:}") List<String> operatorIds) {
         this.jdbc = jdbc;
         this.jwt = jwt;
         this.cookies = cookies;
         this.users = users;
+        this.consents = consents;
         this.admins = admins;
         this.operatorIds = operatorIds;
     }
@@ -68,7 +71,7 @@ public class RefreshSessions {
         String access;
         if (session.role().equals("STUDENT")) {
             var user = users.findById(session.id()).orElseThrow(RefreshSessions::unauthorized);
-            access = jwt.issueStudent(user);
+            access = jwt.issueStudent(user, consents.hasCurrentConsent(user.getId()));
         } else {
             var admin = admins.findById(session.id()).filter(a -> a.isActivated())
                     .orElseThrow(RefreshSessions::unauthorized);

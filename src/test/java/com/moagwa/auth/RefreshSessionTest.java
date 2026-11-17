@@ -10,6 +10,7 @@ import com.moagwa.organization.Organization;
 import com.moagwa.organization.OrganizationRepository;
 import com.moagwa.organization.OrganizationType;
 import com.moagwa.user.User;
+import com.moagwa.user.ConsentRepository;
 import com.moagwa.user.UserRepository;
 import jakarta.servlet.http.Cookie;
 import java.nio.charset.StandardCharsets;
@@ -29,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class RefreshSessionTest {
     @Autowired RefreshSessions sessions;
     @Autowired UserRepository users;
+    @Autowired ConsentRepository consents;
     @Autowired JwtService jwt;
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;
@@ -36,9 +38,9 @@ class RefreshSessionTest {
     @Autowired OrganizationRepository organizations;
 
     private Cookie start() {
-        var user = new User("DEV", UUID.randomUUID().toString(), "refresh");
-        user.consent();
-        return start(jwt.issueStudent(users.save(user).getId()));
+        var user = users.save(new User("DEV", UUID.randomUUID().toString(), "refresh"));
+        consents.agreeCurrent(user.getId());
+        return start(jwt.issueStudent(user.getId()));
     }
 
     private Cookie start(String accessToken) {

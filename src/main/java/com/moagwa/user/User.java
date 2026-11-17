@@ -40,11 +40,6 @@ public class User {
     @Column(name = "verified_at")
     private java.time.Instant verifiedAt;
 
-    @Column(name = "terms_version")
-    private String termsVersion;
-
-    @Column(name = "terms_agreed_at")
-    private java.time.Instant termsAgreedAt;
 
     public User(String authProvider, String providerUserId, String nickname) {
         this.authProvider = authProvider;
@@ -54,15 +49,6 @@ public class User {
 
     public boolean isVerified() {
         return verifiedAt != null;
-    }
-
-    public boolean hasConsented() {
-        return TERMS_VERSION.equals(termsVersion);
-    }
-
-    public void consent() {
-        this.termsVersion = TERMS_VERSION;
-        this.termsAgreedAt = java.time.Instant.now();
     }
 
     public void updateProfile(String nickname, Long primaryDepartmentId, Integer admissionYear) {

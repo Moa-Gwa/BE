@@ -24,6 +24,7 @@ class MeService {
     private final MeRepository me;
     private final ReminderService reminders;
     private final JwtService jwt;
+    private final ConsentRepository consents;
 
     @Transactional(readOnly = true)
     Profile profile(long userId) {
@@ -94,8 +95,8 @@ class MeService {
 
     @Transactional(readOnly = true)
     ConsentStatus consent(long userId) {
-        User u = user(userId);
-        return new ConsentStatus(!u.hasConsented(), User.TERMS_VERSION, u.getTermsVersion());
+        boolean agreed = consents.hasCurrentConsent(userId);
+        return new ConsentStatus(!agreed, User.TERMS_VERSION, agreed ? User.TERMS_VERSION : null);
     }
 
     /** 동의를 저장하고 동의가 반영된 액세스 토큰을 돌려줌 */
@@ -105,12 +106,13 @@ class MeService {
             throw new ApiException(HttpStatus.CONFLICT, "약관이 바뀌었습니다. 새로고침 후 다시 동의해 주세요.");
         }
         User u = user(userId);
-        u.consent();
-        return jwt.issueStudent(u);
+        consents.agreeCurrent(userId);
+        return jwt.issueStudent(u, true);
     }
 
     @Transactional
     void withdraw(long userId) {
+        users.findByIdForUpdate(userId).orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
         if (me.hasOngoingTrade(userId)) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "진행 중인 거래나 모집 중인 같이 사기가 있어 탈퇴할 수 없습니다. 먼저 정리해 주세요.");
