@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,7 +22,7 @@ class MarketUploadController {
     private final UploadService uploads;
 
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    Map<String, List<String>> upload(@RequestParam("files") List<MultipartFile> files) {
+    Map<String, List<String>> upload(@RequestPart("files") List<MultipartFile> files) {
         return Map.of("urls", uploads.store(files));
     }
 }

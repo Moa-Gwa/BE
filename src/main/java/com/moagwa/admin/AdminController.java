@@ -6,6 +6,7 @@ import com.moagwa.notice.Notice;
 import com.moagwa.notice.NoticeStatus;
 import com.moagwa.organization.Organization;
 import com.moagwa.organization.OrganizationRepository;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -31,6 +32,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -88,7 +90,7 @@ class AdminController {
     }
 
     @PostMapping(value = "/uploads/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    Map<String, List<String>> upload(@RequestParam("files") List<MultipartFile> files) {
+    Map<String, List<String>> upload(@RequestPart("files") List<MultipartFile> files) {
         return Map.of("urls", uploads.store(files));
     }
 
@@ -148,6 +150,7 @@ class AdminController {
                      @Pattern(regexp = "^$|^https?://\\S+$") String externalUrl) {
     }
 
+    @Schema(name = "AdminOrganization")
     record OrgInfo(long id, String name, String type, String description, String profileImage, String externalUrl,
                    boolean verified) {
     }
