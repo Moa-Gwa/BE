@@ -72,7 +72,7 @@
     "summary": "수집 공지 상세 조회"
   },
   "GET /api/feed": {
-    "description": "기관과 카테고리 조건으로 공지 피드를 조회합니다. 기관, 카테고리, 상태, 검색어로 결과를 좁힐 수 있습니다. page는 0부터 시작합니다.",
+    "description": "공지 피드를 조회합니다. 발행 주체(orgType, organizationId), 카테고리(category), 상태(status), 검색어(q)로 결과를 좁힐 수 있습니다. field는 검색 범위로 all(기본값, 제목, 본문, 단체명, 키워드), title(제목), content(본문) 중 하나이며 그 밖의 값은 400입니다. sort는 latest(기본값), deadline, event, popular 중 하나입니다. page는 0부터 시작합니다.",
     "summary": "공지 피드 조회"
   },
   "GET /api/feed/for-me": {
@@ -96,7 +96,7 @@
     "summary": "공동구매 참가자 목록을 조회"
   },
   "GET /api/market/items": {
-    "description": "중고거래 상품 목록을 조회합니다.",
+    "description": "중고거래 상품 목록을 조회합니다. category, 검색어(q), 정렬(sort: latest 기본값, price, popular)로 결과를 좁힐 수 있습니다. status는 ON_SALE, RESERVED, SOLD 중 하나 또는 쉼표로 여러 값을 지정합니다(예: ON_SALE,RESERVED는 거래 완료 전 상품). 허용되지 않은 값이 섞이면 400입니다. page는 0부터 시작합니다.",
     "summary": "중고거래 상품 목록을 조회"
   },
   "GET /api/market/items/{id}": {
