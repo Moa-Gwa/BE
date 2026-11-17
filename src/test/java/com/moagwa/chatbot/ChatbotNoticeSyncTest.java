@@ -65,7 +65,7 @@ class ChatbotNoticeSyncTest {
             public Clock withZone(java.time.ZoneId zone) { return this; }
             public Instant instant() { return now[0]; }
         };
-        return new ChatbotNoticeSync(jdbc, clock, "http://127.0.0.1:" + chatbot.getAddress().getPort(), "secret",
+        return new ChatbotNoticeSync(jdbc, json, clock, "http://127.0.0.1:" + chatbot.getAddress().getPort(), "secret",
                 "https://moagwa.example/");
     }
 
@@ -103,6 +103,28 @@ class ChatbotNoticeSyncTest {
         now[0] = now[0].plus(Duration.ofMinutes(11));
         sync.tick(); // 바뀐 게 없어도 10분이 지나면 다시 보냄(챗봇 재시작 복구)
         assertThat(received).hasSize(3);
+    }
+
+    @Test
+    void swappingDeadlineAndEventDatesIsStillAChange() {
+        String tag = UUID.randomUUID().toString().substring(0, 8);
+        var org = organizations.saveAndFlush(new Organization("챗봇 날짜 학과 " + tag, OrganizationType.DEPARTMENT));
+        var source = sources.saveAndFlush(new CrawlSource("chatbot-dates-" + tag, org, "https://school.example/list.do"));
+        long id = crawled.saveAndFlush(new CrawledNotice(source, "dates-" + tag, "학술제 " + tag, "https://school.example/3",
+                false, Instant.now(), Instant.now())).getId();
+        Instant at = Instant.parse("2030-06-15T09:00:00Z");
+        jdbc.update("UPDATE crawled_notices SET deadline_at = ?, event_start_at = NULL WHERE id = ?", java.sql.Timestamp.from(at), id);
+
+        ChatbotNoticeSync sync = sync();
+        sync.tick();
+        // 같은 값이 마감에서 행사 시작으로 옮겨 가도 다른 내용으로 봄(구분자로 이어 붙이면 NULL이 빠져 같아짐)
+        jdbc.update("UPDATE crawled_notices SET deadline_at = NULL, event_start_at = ? WHERE id = ?", java.sql.Timestamp.from(at), id);
+        sync.tick();
+        assertThat(received).hasSize(2);
+        JsonNode sent = received.get(1).get("notices").findParents("key").stream()
+                .filter(n -> n.get("key").asText().equals("CRAWLED:" + id)).findFirst().orElseThrow();
+        assertThat(sent.get("deadlineAt").isNull()).isTrue();
+        assertThat(sent.get("eventStartAt").asText()).isEqualTo("2030-06-15T09:00:00Z");
     }
 
     @Test
