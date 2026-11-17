@@ -46,6 +46,7 @@ class DevDataInitializerTest {
                 .containsExactly("student-council", "ai-council", "cs-council", "operator");
         assertThat(saved.getAllValues()).extracting(Admin::isOperator).containsExactly(false, false, false, true);
         assertThat(saved.getAllValues().get(0).getOrganization()).isSameAs(existing);
+        assertThat(saved.getAllValues().get(3).getOrganization().getName()).isEqualTo(Organization.OPERATOR_NAME);
     }
 
     @Test

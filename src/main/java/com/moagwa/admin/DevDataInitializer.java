@@ -32,7 +32,7 @@ class DevDataInitializer implements CommandLineRunner {
         createAdminIfMissing("student-council", "총학생회 관리자", "총학생회");
         createAdminIfMissing("ai-council", "AI융합학부 관리자", "AI융합학부 학생회");
         createAdminIfMissing("cs-council", "컴퓨터정보공학부 관리자", "컴퓨터정보공학부 학생회");
-        createAdminIfMissing("operator", "모아과 운영자", "총학생회", true);
+        createAdminIfMissing("operator", "모아과 운영자", Organization.OPERATOR_NAME, true);
     }
 
     private void createAdminIfMissing(String loginId, String name, String orgName) {

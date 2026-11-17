@@ -128,6 +128,34 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void searchFieldNarrowsToTitleOrBody() throws Exception {
+        createNotice(admin, Map.of("title", "제목어" + tag, "description", "본문어" + tag + " 안내"));
+
+        mvc.perform(get("/api/feed").param("q", "본문어" + tag).param("field", "title"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0));
+        mvc.perform(get("/api/feed").param("q", "본문어" + tag).param("field", "content"))
+                .andExpect(jsonPath("$.items.length()").value(1));
+        mvc.perform(get("/api/feed").param("q", "제목어" + tag).param("field", "content"))
+                .andExpect(jsonPath("$.items.length()").value(0));
+        mvc.perform(get("/api/feed").param("q", "본문어" + tag))
+                .andExpect(jsonPath("$.items.length()").value(1));
+        mvc.perform(get("/api/feed").param("q", "제목어" + tag).param("field", "title"))
+                .andExpect(jsonPath("$.items.length()").value(1));
+        mvc.perform(get("/api/feed").param("q", tag).param("field", "body")).andExpect(status().isBadRequest());
+
+        CrawlSource source = sources.save(new CrawlSource("search-" + tag, council, "https://example.com/list"));
+        CrawledNotice c = new CrawledNotice(source, "search", "수집제목" + tag, "https://example.com/s", false,
+                Instant.now(), Instant.now());
+        c.applyContent("<p>수집본문" + tag + "</p>", "수집본문" + tag);
+        crawled.save(c);
+        mvc.perform(get("/api/feed").param("q", "수집본문" + tag).param("field", "content"))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].source").value("CRAWLED"));
+        mvc.perform(get("/api/feed").param("q", "수집본문" + tag).param("field", "title"))
+                .andExpect(jsonPath("$.items.length()").value(0));
+    }
+
+    @Test
     void adminCannotTouchAnotherOrganizationsNotice() throws Exception {
         long id = createNotice(admin, Map.of()).get("id").asLong();
 
@@ -606,4 +634,40 @@ class ApiIntegrationTest {
         return Map.of("type", "IMAGES", "layout", layout, "images", urls, "captions", captions);
     }
 
+    @Test
+    void operatorNoticesReachEveryStudentRegardlessOfInterests() throws Exception {
+        Organization operatorOrg = operatorOrganization();
+        Admin operator = admins.save(new Admin("op-" + tag, encoder.encode("pw-1234"), "운영자", operatorOrg));
+
+        // 운영자 단체를 관심 단체에 넣지 않고 저장해도 운영자 공지는 받음
+        mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("organizationIds", List.of(council.getId())))))
+                .andExpect(status().isOk());
+        long id = createNotice(operator, Map.of("title", "운영공지 " + tag)).get("id").asLong();
+        try {
+            mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.organization.name").value("운영자"));
+            String forMe = mvc.perform(get("/api/feed/for-me").header("Authorization", studentToken()))
+                    .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+            assertThat(forMe).contains("운영공지 " + tag);
+            mvc.perform(get("/api/me/notifications").header("Authorization", studentToken()))
+                    .andExpect(jsonPath("$.items[0].noticeId").value(id));
+        } finally {
+            // 다른 테스트의 맞춤 피드에 섞이지 않도록 정리
+            jdbc.update("UPDATE notices SET deleted_at = now() WHERE id = ?", id);
+        }
+    }
+
+    @Test
+    void organizationsListMarksOperatorAsRequired() throws Exception {
+        mvc.perform(get("/api/organizations").param("q", "운영자"))
+                .andExpect(jsonPath("$[0].name").value("운영자"))
+                .andExpect(jsonPath("$[0].required").value(true));
+        mvc.perform(get("/api/organizations").param("q", council.getName()))
+                .andExpect(jsonPath("$[0].required").value(false));
+    }
+
+    private Organization operatorOrganization() {
+        return organizations.findByName(Organization.OPERATOR_NAME).orElseThrow();
+    }
 }

@@ -1,5 +1,6 @@
 package com.moagwa.feed;
 
+import com.moagwa.common.exception.ApiException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -54,9 +55,15 @@ class FeedRepository {
                 p.addValue("status", f.status());
             }
         }
+        String match = switch (f.field() == null ? "all" : f.field()) {
+            case "title" -> "f.title ILIKE :q ESCAPE '\\'";
+            case "content" -> "f.body ILIKE :q ESCAPE '\\'";
+            case "all" -> "(f.title ILIKE :q ESCAPE '\\' OR f.body ILIKE :q ESCAPE '\\' "
+                    + "OR f.organization_name ILIKE :q ESCAPE '\\' OR f.keywords ILIKE :q ESCAPE '\\')";
+            default -> throw ApiException.badRequest("검색 범위는 all, title, content 중 하나여야 합니다.");
+        };
         if (f.q() != null && !f.q().isBlank()) {
-            where.add("(f.title ILIKE :q ESCAPE '\\' OR f.summary ILIKE :q ESCAPE '\\' "
-                    + "OR f.organization_name ILIKE :q ESCAPE '\\' OR f.keywords ILIKE :q ESCAPE '\\')");
+            where.add(match);
             p.addValue("q", "%" + escapeLike(f.q().trim()) + "%");
         }
         if (f.forUserId() != null) {
@@ -64,7 +71,8 @@ class FeedRepository {
                     (f.organization_id IN (
                         SELECT primary_department_id FROM users WHERE id = :me AND primary_department_id IS NOT NULL
                         UNION SELECT target_id FROM user_interests
-                               WHERE user_id = :me AND kind IN ('DEPARTMENT', 'ORGANIZATION'))
+                               WHERE user_id = :me AND kind IN ('DEPARTMENT', 'ORGANIZATION')
+                        UNION SELECT id FROM organizations WHERE is_required)
                      OR f.category IN (
                         SELECT c.code FROM user_interests ui JOIN categories c ON c.id = ui.target_id
                          WHERE ui.user_id = :me AND ui.kind = 'CATEGORY'))

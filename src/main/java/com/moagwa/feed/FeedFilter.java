@@ -7,6 +7,7 @@ public record FeedFilter(
         String category,
         String status,
         String q,
+        String field,
         String sort,
         Long forUserId,
         Long viewerId,

@@ -1,12 +1,19 @@
 package com.moagwa.user;
 
+import com.moagwa.auth.JwtService;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.reminder.ReminderService;
+import com.moagwa.user.MeDto.ConsentRequest;
+import com.moagwa.user.MeDto.ConsentStatus;
 import com.moagwa.user.MeDto.NotificationList;
 import com.moagwa.user.MeDto.NotificationSettings;
 import com.moagwa.user.MeDto.Profile;
 import com.moagwa.user.MeDto.ProfileUpdate;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -20,6 +27,8 @@ class MeService {
     private final UserRepository users;
     private final MeRepository me;
     private final ReminderService reminders;
+    private final JwtService jwt;
+    private final ConsentRepository consents;
 
     @Transactional(readOnly = true)
     Profile profile(long userId) {
@@ -39,6 +48,24 @@ class MeService {
         requireOrganizations(organizations, "STUDENT_GOVERNMENT", "관심 학생자치단체");
         if (me.countCategories(categories) != categories.size()) {
             throw ApiException.badRequest("존재하지 않는 카테고리가 포함되어 있습니다.");
+        }
+        Long before = u.getPrimaryDepartmentId();
+        Long after = req.primaryDepartmentId();
+        if (!Objects.equals(before, after)) {
+            // 주전공을 고르거나 바꾼 순간에만 관심 학과와 학과 학생회를 맞춤. 그 뒤 학생이 해제한 항목은 그대로 둠
+            Map<Long, Long> councils = me.studentGovernmentsOf(Stream.of(before, after).filter(Objects::nonNull).toList());
+            departments = new ArrayList<>(departments);
+            organizations = new ArrayList<>(organizations);
+            if (before != null) {
+                departments.remove(before);
+                organizations.remove(councils.get(before));
+            }
+            if (after != null) {
+                departments.add(after);
+                if (councils.containsKey(after)) {
+                    organizations.add(councils.get(after));
+                }
+            }
         }
         u.updateProfile(req.nickname(), req.primaryDepartmentId(), req.admissionYear());
         me.deleteInterests(userId);
@@ -86,6 +113,33 @@ class MeService {
     NotificationSettings updateSettings(long userId, NotificationSettings s) {
         me.saveSettings(userId, s);
         return s;
+    }
+
+    @Transactional(readOnly = true)
+    ConsentStatus consent(long userId) {
+        boolean agreed = consents.hasCurrentConsent(userId);
+        return new ConsentStatus(!agreed, User.TERMS_VERSION, agreed ? User.TERMS_VERSION : null);
+    }
+
+    /** 동의를 저장하고 동의가 반영된 액세스 토큰을 돌려줌 */
+    @Transactional
+    String agree(long userId, ConsentRequest req) {
+        if (!User.TERMS_VERSION.equals(req.version())) {
+            throw new ApiException(HttpStatus.CONFLICT, "약관이 바뀌었습니다. 새로고침 후 다시 동의해 주세요.");
+        }
+        User u = user(userId);
+        consents.agreeCurrent(userId);
+        return jwt.issueStudent(u, true);
+    }
+
+    @Transactional
+    void withdraw(long userId) {
+        users.findByIdForUpdate(userId).orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
+        if (me.hasOngoingTrade(userId)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "진행 중인 거래나 모집 중인 같이 사기가 있어 탈퇴할 수 없습니다. 먼저 정리해 주세요.");
+        }
+        me.deleteUser(userId);
     }
 
     private User user(long userId) {

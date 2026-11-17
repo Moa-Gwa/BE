@@ -1,5 +1,7 @@
 package com.moagwa.user;
 
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
@@ -7,6 +9,16 @@ import java.util.List;
 final class MeDto {
 
     private MeDto() {
+    }
+
+    /** required = 현재 버전 약관에 아직 동의하지 않음 */
+    record ConsentStatus(boolean required, String version, String agreedVersion) {
+    }
+
+    /** 이용약관과 개인정보 수집/이용 모두 필수 동의. version은 화면에 보여 준 문서 버전 */
+    record ConsentRequest(@NotBlank String version,
+            @AssertTrue(message = "이용약관에 동의해 주세요.") boolean terms,
+            @AssertTrue(message = "개인정보 수집, 이용에 동의해 주세요.") boolean privacy) {
     }
 
     record Profile(long id, String nickname, Long primaryDepartmentId, Integer admissionYear,

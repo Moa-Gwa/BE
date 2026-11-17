@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.moagwa.auth.AuthCookies;
 import com.moagwa.auth.JwtService;
+import com.moagwa.user.ConsentRepository;
 import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
 import jakarta.servlet.http.Cookie;
@@ -46,6 +47,7 @@ class MarketApiIntegrationTest {
     @Autowired ObjectMapper json;
     @Autowired JwtService jwt;
     @Autowired UserRepository users;
+    @Autowired ConsentRepository consents;
     @Autowired JdbcTemplate jdbc;
     @Autowired DataSource dataSource;
 
@@ -95,6 +97,7 @@ class MarketApiIntegrationTest {
     @Test
     void emailVerificationIssuesVerifiedToken() throws Exception {
         User plain = users.save(new User("DEV", "plain2-" + tag, "plain2-" + tag));
+        consents.agreeCurrent(plain.getId());
         String auth = "Bearer " + jwt.issueStudent(plain.getId());
         String email = "student" + tag + "@catholic.ac.kr";
 
@@ -398,6 +401,26 @@ class MarketApiIntegrationTest {
                 .andExpect(status().isConflict());
         mvc.perform(get("/api/market/group-buys/" + id).header("Authorization", token(buyer)))
                 .andExpect(jsonPath("$.summary.status").value("CLOSED"));
+    }
+
+    @Test
+    void statusFilterAcceptsSeveralStatusesSoReservedItemsStayListedUntilSold() throws Exception {
+        createItem(seller, "판매중 " + tag);
+        long reserved = createItem(seller, "예약중 " + tag);
+        long sold = createItem(seller, "판매완료 " + tag);
+        jdbc.update("UPDATE market_items SET status = 'RESERVED' WHERE id = ?", reserved);
+        jdbc.update("UPDATE market_items SET status = 'SOLD' WHERE id = ?", sold);
+
+        mvc.perform(get("/api/market/items").param("q", tag).param("status", "ON_SALE,RESERVED")
+                        .header("Authorization", token(buyer)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[?(@.status == 'SOLD')]").isEmpty());
+        mvc.perform(get("/api/market/items").param("q", tag).param("status", "ON_SALE")
+                        .header("Authorization", token(buyer)))
+                .andExpect(jsonPath("$.items.length()").value(1));
+        mvc.perform(get("/api/market/items").param("status", "ON_SALE,DELETED").header("Authorization", token(buyer)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

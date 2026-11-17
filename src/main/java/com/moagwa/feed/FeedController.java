@@ -2,11 +2,15 @@ package com.moagwa.feed;
 
 import com.moagwa.auth.CurrentUser;
 import com.moagwa.common.exception.ApiException;
+import com.moagwa.organization.Organization;
 import com.moagwa.organization.OrganizationRepository;
+import com.moagwa.organization.OrganizationType;
 import com.moagwa.notice.CategoryRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -37,11 +41,12 @@ class FeedController {
                   @RequestParam(required = false) String category,
                   @RequestParam(required = false) String status,
                   @RequestParam(required = false) String q,
+                  @RequestParam(required = false) String field,
                   @RequestParam(required = false) String sort,
                   @RequestParam(defaultValue = "0") int page,
                   @RequestParam(defaultValue = "20") int size,
                   Authentication auth) {
-        return feed.search(new FeedFilter(orgType, organizationId, category, status, q, sort, null,
+        return feed.search(new FeedFilter(orgType, organizationId, category, status, q, field, sort, null,
                 CurrentUser.studentIdOrNull(auth), page, size));
     }
 
@@ -58,7 +63,7 @@ class FeedController {
         if (me == null) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
         }
-        return feed.search(new FeedFilter(null, null, null, null, null, "latest", me, me, page, size));
+        return feed.search(new FeedFilter(null, null, null, null, null, null, "latest", me, me, page, size));
     }
 
     @GetMapping("/me/bookmarks")
@@ -97,10 +102,14 @@ class FeedController {
     @GetMapping("/organizations")
     List<OrganizationView> organizations(@RequestParam(required = false) String type,
                                          @RequestParam(required = false) String q) {
-        return organizations.findAll().stream()
+        List<Organization> all = organizations.findAll();
+        Map<String, Long> councils = all.stream().filter(o -> o.getType() == OrganizationType.STUDENT_GOVERNMENT)
+                .collect(Collectors.toMap(Organization::getName, Organization::getId));
+        return all.stream()
                 .filter(o -> type == null || o.getType().name().equals(type))
                 .filter(o -> q == null || o.getName().contains(q))
-                .map(o -> new OrganizationView(o.getId(), o.getName(), o.getType().name(), o.getCollege()))
+                .map(o -> new OrganizationView(o.getId(), o.getName(), o.getType().name(), o.getCollege(), o.isRequired(),
+                        o.getType() == OrganizationType.DEPARTMENT ? councils.get(Organization.councilNameOf(o.getName())) : null))
                 .sorted(java.util.Comparator.comparing(OrganizationView::name))
                 .toList();
     }
@@ -119,6 +128,7 @@ class FeedController {
     record CategoryView(long id, String code, String name) {
     }
 
-    record OrganizationView(long id, String name, String type, String college) {
+    /** required가 true인 단체는 구독 해제할 수 없어 FE가 해제 불가로 표시함. studentGovernmentId는 학과의 학과 학생회(없으면 null) */
+    record OrganizationView(long id, String name, String type, String college, boolean required, Long studentGovernmentId) {
     }
 }
