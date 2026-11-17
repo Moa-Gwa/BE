@@ -33,9 +33,7 @@ class MarketItemService {
             requireIn(CATEGORIES, categoryFilter, "카테고리");
         }
         if (statusFilter != null) {
-            for (String one : statusFilter.split(",")) {
-                requireIn(STATUSES, one, "판매 상태");
-            }
+            requireIn(STATUSES, statusFilter, "판매 상태");
         }
         PageWindow window = PageWindow.of(page, size);
         List<ItemSummary> fetched = items.search(
