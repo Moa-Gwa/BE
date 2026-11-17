@@ -6,7 +6,6 @@ import com.moagwa.user.UserRepository;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.market.StudentVerificationRepository.Pending;
 import com.moagwa.market.VerificationDto.SendResult;
-import com.moagwa.market.VerificationDto.Status;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -42,13 +41,6 @@ class VerificationService {
     /** true이면 코드를 응답에도 담는다. 메일 서버가 없는 로컬·시연 환경 전용이다. */
     @Value("${moagwa.verification.expose-code:false}")
     private boolean exposeCode;
-
-    @Transactional(readOnly = true)
-    Status status(long me) {
-        return verifications.findCompleted(me)
-                .map(done -> new Status(true, done.verifiedAt().toString(), mask(done.schoolEmail())))
-                .orElseGet(() -> new Status(false, null, null));
-    }
 
     @Transactional
     SendResult sendCode(String rawEmail, long me) {
@@ -103,13 +95,6 @@ class VerificationService {
                 || !email.endsWith("@" + allowedDomain)) {
             throw ApiException.badRequest("@" + allowedDomain + " 학교 메일만 인증할 수 있습니다.");
         }
-    }
-
-    /** hyun1234@catholic.ac.kr → hyu***@catholic.ac.kr */
-    private static String mask(String email) {
-        int at = email.indexOf('@');
-        String id = email.substring(0, at);
-        return id.substring(0, Math.min(3, id.length())) + "***" + email.substring(at);
     }
 
     private static ApiException codeNotRequested() {

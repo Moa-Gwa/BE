@@ -87,13 +87,6 @@ public class AdminNoticeService {
     }
 
     @Transactional
-    public AdminNoticeView publish(CurrentUser me, long id, String mode, Instant publishAt) {
-        Notice n = owned(me, id);
-        applyMode(n, mode, publishAt);
-        return view(n, clock.instant());
-    }
-
-    @Transactional
     public AdminNoticeView close(CurrentUser me, long id) {
         Notice n = owned(me, id);
         if (n.getStatus() != NoticeStatus.PUBLISHED) {
