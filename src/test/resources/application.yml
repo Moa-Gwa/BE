@@ -5,6 +5,8 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+    placeholders:
+      "[operator_login_ids]": ""
 
 moagwa:
   frontend-url: https://localhost:3000
