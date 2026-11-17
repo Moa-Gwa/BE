@@ -64,7 +64,8 @@ class FeedRepository {
                     (f.organization_id IN (
                         SELECT primary_department_id FROM users WHERE id = :me AND primary_department_id IS NOT NULL
                         UNION SELECT target_id FROM user_interests
-                               WHERE user_id = :me AND kind IN ('DEPARTMENT', 'ORGANIZATION'))
+                               WHERE user_id = :me AND kind IN ('DEPARTMENT', 'ORGANIZATION')
+                        UNION SELECT id FROM organizations WHERE is_required)
                      OR f.category IN (
                         SELECT c.code FROM user_interests ui JOIN categories c ON c.id = ui.target_id
                          WHERE ui.user_id = :me AND ui.kind = 'CATEGORY'))

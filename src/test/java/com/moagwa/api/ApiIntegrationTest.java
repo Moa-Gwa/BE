@@ -211,7 +211,7 @@ class ApiIntegrationTest {
         mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json.writeValueAsString(Map.of("nickname", "민지", "organizationIds",
-                                List.of(council.getId()), "categoryIds", List.of()))))
+                                withOperator(council.getId()), "categoryIds", List.of()))))
                 .andExpect(status().isOk());
         long id = createNotice(admin, Map.of("title", "관심단체공지 " + tag)).get("id").asLong();
         createNotice(otherAdmin, Map.of("title", "무관공지 " + tag));
@@ -241,7 +241,7 @@ class ApiIntegrationTest {
     void studentReadsNotificationsAndKeepsNotificationSettings() throws Exception {
         mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json.writeValueAsString(Map.of("organizationIds", List.of(council.getId())))))
+                        .content(json.writeValueAsString(Map.of("organizationIds", withOperator(council.getId())))))
                 .andExpect(status().isOk());
         createNotice(admin, Map.of("title", "알림1 " + tag));
         createNotice(admin, Map.of("title", "알림2 " + tag));
@@ -606,4 +606,46 @@ class ApiIntegrationTest {
         return Map.of("type", "IMAGES", "layout", layout, "images", urls, "captions", captions);
     }
 
+    @Test
+    void operatorNoticesReachEveryStudentRegardlessOfInterests() throws Exception {
+        Organization operatorOrg = operatorOrganization();
+        Admin operator = admins.save(new Admin("op-" + tag, encoder.encode("pw-1234"), "운영자", operatorOrg));
+
+        long id = createNotice(operator, Map.of("title", "운영공지 " + tag)).get("id").asLong();
+        try {
+            mvc.perform(get("/api/notices/" + id)).andExpect(jsonPath("$.organization.name").value("운영자"));
+            String forMe = mvc.perform(get("/api/feed/for-me").header("Authorization", studentToken()))
+                    .andReturn().getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+            assertThat(forMe).contains("운영공지 " + tag);
+            mvc.perform(get("/api/me/notifications").header("Authorization", studentToken()))
+                    .andExpect(jsonPath("$.items[0].noticeId").value(id));
+        } finally {
+            // 다른 테스트의 맞춤 피드에 섞이지 않도록 정리
+            jdbc.update("UPDATE notices SET deleted_at = now() WHERE id = ?", id);
+        }
+    }
+
+    @Test
+    void studentsCannotUnsubscribeFromTheOperatorOrganization() throws Exception {
+        long operatorId = operatorOrganization().getId();
+        mvc.perform(get("/api/me/profile").header("Authorization", studentToken()))
+                .andExpect(jsonPath("$.organizationIds[0]").value(operatorId));
+        mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("organizationIds", List.of(council.getId())))))
+                .andExpect(status().isBadRequest());
+        mvc.perform(get("/api/organizations").param("q", "운영자"))
+                .andExpect(jsonPath("$[0].name").value("운영자"))
+                .andExpect(jsonPath("$[0].required").value(true));
+        mvc.perform(get("/api/organizations").param("q", council.getName()))
+                .andExpect(jsonPath("$[0].required").value(false));
+    }
+
+    private Organization operatorOrganization() {
+        return organizations.findByName(Organization.OPERATOR_NAME).orElseThrow();
+    }
+
+    private List<Long> withOperator(long organizationId) {
+        return List.of(operatorOrganization().getId(), organizationId);
+    }
 }

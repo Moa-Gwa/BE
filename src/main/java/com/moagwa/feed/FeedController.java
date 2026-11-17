@@ -100,7 +100,8 @@ class FeedController {
         return organizations.findAll().stream()
                 .filter(o -> type == null || o.getType().name().equals(type))
                 .filter(o -> q == null || o.getName().contains(q))
-                .map(o -> new OrganizationView(o.getId(), o.getName(), o.getType().name(), o.getCollege()))
+                .map(o -> new OrganizationView(o.getId(), o.getName(), o.getType().name(), o.getCollege(),
+                        o.isRequired()))
                 .sorted(java.util.Comparator.comparing(OrganizationView::name))
                 .toList();
     }
@@ -119,6 +120,7 @@ class FeedController {
     record CategoryView(long id, String code, String name) {
     }
 
-    record OrganizationView(long id, String name, String type, String college) {
+    /** required가 true인 단체는 구독 해제할 수 없어 FE가 해제 불가로 표시함 */
+    record OrganizationView(long id, String name, String type, String college, boolean required) {
     }
 }

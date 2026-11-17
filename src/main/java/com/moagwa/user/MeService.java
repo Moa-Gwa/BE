@@ -7,6 +7,7 @@ import com.moagwa.user.MeDto.NotificationSettings;
 import com.moagwa.user.MeDto.Profile;
 import com.moagwa.user.MeDto.ProfileUpdate;
 import java.util.List;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,9 @@ class MeService {
         }
         requireOrganizations(departments, "DEPARTMENT", "관심 학과");
         requireOrganizations(organizations, "STUDENT_GOVERNMENT", "관심 학생자치단체");
+        if (!organizations.containsAll(me.requiredOrganizations())) {
+            throw ApiException.badRequest("운영자 단체는 구독을 해제할 수 없습니다.");
+        }
         if (me.countCategories(categories) != categories.size()) {
             throw ApiException.badRequest("존재하지 않는 카테고리가 포함되어 있습니다.");
         }
@@ -95,8 +99,14 @@ class MeService {
 
     private Profile profileOf(User u) {
         return new Profile(u.getId(), u.getNickname(), u.getPrimaryDepartmentId(), u.getAdmissionYear(),
-                me.interests(u.getId(), "DEPARTMENT"), me.interests(u.getId(), "ORGANIZATION"),
-                me.interests(u.getId(), "CATEGORY"));
+                me.interests(u.getId(), "DEPARTMENT"), organizationsOf(u.getId()), me.interests(u.getId(), "CATEGORY"));
+    }
+
+    /** 운영자 단체처럼 필수인 단체는 저장 여부와 관계없이 항상 구독 중으로 보임 */
+    private List<Long> organizationsOf(long userId) {
+        return Stream.concat(me.interests(userId, "ORGANIZATION").stream(),
+                        me.requiredOrganizations().stream())
+                .distinct().sorted().toList();
     }
 
     private void requireOrganizations(List<Long> ids, String type, String label) {

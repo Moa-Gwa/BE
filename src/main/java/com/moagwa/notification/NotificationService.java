@@ -22,7 +22,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class NotificationService {
 
     private static final String MATCH = """
-            (u.primary_department_id = :org
+            (o.is_required
+             OR u.primary_department_id = :org
              OR EXISTS (SELECT 1 FROM user_interests ui WHERE ui.user_id = u.id
                           AND ui.kind IN ('DEPARTMENT', 'ORGANIZATION') AND ui.target_id = :org)
              %s)
