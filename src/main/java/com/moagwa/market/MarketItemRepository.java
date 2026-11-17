@@ -37,8 +37,9 @@ class MarketItemRepository {
             params.addValue("category", search.category());
         }
         if (search.status() != null) {
-            where.append(" AND i.status = :status");
-            params.addValue("status", search.status());
+            // 쉼표로 여러 상태를 받음. 예: ON_SALE,RESERVED (거래 완료 전 물품)
+            where.append(" AND i.status IN (:status)");
+            params.addValue("status", List.of(search.status().split(",")));
         }
         if (search.query() != null) {
             where.append(" AND (i.title ILIKE :q OR i.description ILIKE :q)");
