@@ -151,10 +151,6 @@
     "description": "일정의 알림 설정을 확인합니다. source와 id로 공지 또는 개인 일정을 지정합니다. kind로 마감 알림과 행사 시작 알림을 구분합니다.",
     "summary": "일정의 알림 설정을 확인"
   },
-  "GET /api/me/verification": {
-    "description": "재학생 인증 상태를 조회합니다.",
-    "summary": "재학생 인증 상태를 조회"
-  },
   "GET /api/notices/{id}": {
     "description": "운영자가 등록한 공지의 상세 내용을 조회합니다. 공지 피드에서 source가 MANUAL인 항목의 id를 사용합니다.",
     "summary": "운영자가 등록한 공지의 상세 내용을 조회"
@@ -199,10 +195,6 @@
     "description": "관리자 설정 링크가 유효한지 확인합니다. 이메일로 받은 설정 링크의 토큰을 검사합니다.",
     "summary": "관리자 설정 링크가 유효한지 확인"
   },
-  "POST /api/admin/crawler/categories/backfill": {
-    "description": "자동 수집 공지의 카테고리를 일괄 보정합니다. 대상 크롤링 소스의 sourceId가 필요합니다. dryRun=true이면 보정 대상을 점검할 수 있습니다.",
-    "summary": "수집 공지 카테고리 보정"
-  },
   "POST /api/admin/date-corrections/{id}/apply": {
     "description": "접수된 날짜 교정을 공지에 반영합니다. 교정 요청 id와 반영할 날짜를 전달합니다.",
     "summary": "접수된 날짜 교정을 공지에 반영"
@@ -222,10 +214,6 @@
   "POST /api/admin/notices/{id}/duplicate": {
     "description": "기존 공지를 복제해 새 초안을 만듭니다.",
     "summary": "기존 공지를 복제해 새 초안을 만듭니다"
-  },
-  "POST /api/admin/notices/{id}/publish": {
-    "description": "공지의 게시 방식을 설정합니다. 공지 id와 게시 방식을 지정합니다. 즉시 게시는 NOW를 사용합니다.",
-    "summary": "관리자 공지 게시"
   },
   "POST /api/admin/uploads/images": {
     "description": "공지에 첨부할 이미지를 업로드합니다. files에 첨부할 이미지 파일을 지정합니다. 반환된 URL을 공지 작성에 사용할 수 있습니다.",

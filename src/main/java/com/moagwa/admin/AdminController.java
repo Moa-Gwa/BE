@@ -76,11 +76,6 @@ class AdminController {
         service.delete(CurrentUser.from(auth), id);
     }
 
-    @PostMapping("/notices/{id}/publish")
-    AdminNoticeView publish(@PathVariable long id, @RequestBody PublishRequest req, Authentication auth) {
-        return service.publish(CurrentUser.from(auth), id, req.mode(), req.publishAt());
-    }
-
     @PostMapping("/notices/{id}/close")
     AdminNoticeView close(@PathVariable long id, Authentication auth) {
         return service.close(CurrentUser.from(auth), id);
@@ -146,9 +141,6 @@ class AdminController {
     private static OrgInfo orgInfo(Organization o) {
         return new OrgInfo(o.getId(), o.getName(), o.getType().name(), o.getDescription(), o.getProfileImage(),
                 o.getExternalUrl(), o.isVerified());
-    }
-
-    record PublishRequest(String mode, Instant publishAt) {
     }
 
     record OrgUpdate(@Size(max = 2000) String description,

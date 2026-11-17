@@ -6,13 +6,11 @@ import com.moagwa.market.VerificationDto.ConfirmRequest;
 import com.moagwa.market.VerificationDto.ConfirmResult;
 import com.moagwa.market.VerificationDto.EmailRequest;
 import com.moagwa.market.VerificationDto.SendResult;
-import com.moagwa.market.VerificationDto.Status;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,11 +24,6 @@ class VerificationController {
 
     private final VerificationService verification;
     private final AuthCookies cookies;
-
-    @GetMapping
-    Status status(Authentication auth) {
-        return verification.status(me(auth));
-    }
 
     @PostMapping("/email")
     SendResult send(@Valid @RequestBody EmailRequest body, Authentication auth) {
