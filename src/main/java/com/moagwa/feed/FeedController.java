@@ -2,11 +2,15 @@ package com.moagwa.feed;
 
 import com.moagwa.auth.CurrentUser;
 import com.moagwa.common.exception.ApiException;
+import com.moagwa.organization.Organization;
 import com.moagwa.organization.OrganizationRepository;
+import com.moagwa.organization.OrganizationType;
 import com.moagwa.notice.CategoryRepository;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -97,11 +101,14 @@ class FeedController {
     @GetMapping("/organizations")
     List<OrganizationView> organizations(@RequestParam(required = false) String type,
                                          @RequestParam(required = false) String q) {
-        return organizations.findAll().stream()
+        List<Organization> all = organizations.findAll();
+        Map<String, Long> councils = all.stream().filter(o -> o.getType() == OrganizationType.STUDENT_GOVERNMENT)
+                .collect(Collectors.toMap(Organization::getName, Organization::getId));
+        return all.stream()
                 .filter(o -> type == null || o.getType().name().equals(type))
                 .filter(o -> q == null || o.getName().contains(q))
-                .map(o -> new OrganizationView(o.getId(), o.getName(), o.getType().name(), o.getCollege(),
-                        o.isRequired()))
+                .map(o -> new OrganizationView(o.getId(), o.getName(), o.getType().name(), o.getCollege(), o.isRequired(),
+                        o.getType() == OrganizationType.DEPARTMENT ? councils.get(Organization.councilNameOf(o.getName())) : null))
                 .sorted(java.util.Comparator.comparing(OrganizationView::name))
                 .toList();
     }
@@ -120,7 +127,7 @@ class FeedController {
     record CategoryView(long id, String code, String name) {
     }
 
-    /** required가 true인 단체는 구독 해제할 수 없어 FE가 해제 불가로 표시함 */
-    record OrganizationView(long id, String name, String type, String college, boolean required) {
+    /** required가 true인 단체는 구독 해제할 수 없어 FE가 해제 불가로 표시함. studentGovernmentId는 학과의 학과 학생회(없으면 null) */
+    record OrganizationView(long id, String name, String type, String college, boolean required, Long studentGovernmentId) {
     }
 }

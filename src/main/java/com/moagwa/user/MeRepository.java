@@ -1,5 +1,6 @@
 package com.moagwa.user;
 
+import com.moagwa.organization.Organization;
 import com.moagwa.user.MeDto.NotificationSettings;
 import com.moagwa.user.MeDto.NotificationView;
 import java.sql.Timestamp;
@@ -36,7 +37,18 @@ class MeRepository {
         }
     }
 
-    int countOrganizations(List<Long> ids, String type) {
+    /** 학과의 학과 학생회 id. 학과가 아니거나 학생회가 아직 없으면 null */
+    Long studentGovernmentOf(long departmentId) {
+        String name = jdbc.query("SELECT name FROM organizations WHERE id = :id AND type = 'DEPARTMENT'",
+                new MapSqlParameterSource("id", departmentId), rs -> rs.next() ? rs.getString(1) : null);
+        if (name == null) {
+            return null;
+        }
+        return jdbc.query("SELECT id FROM organizations WHERE name = :n AND type = 'STUDENT_GOVERNMENT'",
+                new MapSqlParameterSource("n", Organization.councilNameOf(name)), rs -> rs.next() ? rs.getLong(1) : null);
+    }
+
+        int countOrganizations(List<Long> ids, String type) {
         Integer found = jdbc.queryForObject("SELECT count(*) FROM organizations WHERE id IN (:ids) AND type = :t",
                 new MapSqlParameterSource().addValue("ids", ids).addValue("t", type), Integer.class);
         return found == null ? 0 : found;
