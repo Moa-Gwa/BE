@@ -142,6 +142,17 @@ class ApiIntegrationTest {
         mvc.perform(get("/api/feed").param("q", "제목어" + tag).param("field", "title"))
                 .andExpect(jsonPath("$.items.length()").value(1));
         mvc.perform(get("/api/feed").param("q", tag).param("field", "body")).andExpect(status().isBadRequest());
+
+        CrawlSource source = sources.save(new CrawlSource("search-" + tag, council, "https://example.com/list"));
+        CrawledNotice c = new CrawledNotice(source, "search", "수집제목" + tag, "https://example.com/s", false,
+                Instant.now(), Instant.now());
+        c.applyContent("<p>수집본문" + tag + "</p>", "수집본문" + tag);
+        crawled.save(c);
+        mvc.perform(get("/api/feed").param("q", "수집본문" + tag).param("field", "content"))
+                .andExpect(jsonPath("$.items.length()").value(1))
+                .andExpect(jsonPath("$.items[0].source").value("CRAWLED"));
+        mvc.perform(get("/api/feed").param("q", "수집본문" + tag).param("field", "title"))
+                .andExpect(jsonPath("$.items.length()").value(0));
     }
 
     @Test
