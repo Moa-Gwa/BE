@@ -1,11 +1,15 @@
 package com.moagwa.user;
 
+import com.moagwa.auth.AuthCookies;
 import com.moagwa.auth.CurrentUser;
+import com.moagwa.user.MeDto.ConsentRequest;
+import com.moagwa.user.MeDto.ConsentStatus;
 import com.moagwa.user.MeDto.NotificationList;
 import com.moagwa.user.MeDto.NotificationSettings;
 import com.moagwa.user.MeDto.Profile;
 import com.moagwa.user.MeDto.ProfileUpdate;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -27,6 +31,27 @@ import org.springframework.web.bind.annotation.RestController;
 class MeController {
 
     private final MeService service;
+    private final AuthCookies cookies;
+
+    @GetMapping("/consent")
+    ConsentStatus consent(Authentication auth) {
+        return service.consent(me(auth));
+    }
+
+    /** 동의 후 액세스 쿠키를 다시 발급해 바로 서비스 API를 쓸 수 있게 함 */
+    @PutMapping("/consent")
+    ConsentStatus agree(@Valid @RequestBody ConsentRequest req, Authentication auth, HttpServletResponse response) {
+        cookies.issue(response, service.agree(me(auth), req));
+        return service.consent(me(auth));
+    }
+
+    /** 회원 탈퇴. 진행 중인 거래가 있으면 409 */
+    @DeleteMapping
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void withdraw(Authentication auth, HttpServletResponse response) {
+        service.withdraw(me(auth));
+        cookies.clear(response);
+    }
 
     @GetMapping("/profile")
     Profile profile(Authentication auth) {

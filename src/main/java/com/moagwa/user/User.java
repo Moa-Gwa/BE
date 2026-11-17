@@ -15,6 +15,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class User {
 
+    /** 현재 이용약관, 개인정보 수집/이용 동의 문서 버전. 문서를 바꾸면 올려서 모든 학생에게 다시 동의를 받음 */
+    public static final String TERMS_VERSION = "2026-11-17";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -36,6 +39,7 @@ public class User {
 
     @Column(name = "verified_at")
     private java.time.Instant verifiedAt;
+
 
     public User(String authProvider, String providerUserId, String nickname) {
         this.authProvider = authProvider;
