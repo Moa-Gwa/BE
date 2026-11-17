@@ -53,7 +53,7 @@ public class NotificationService {
                   FROM users u
                   JOIN organizations o ON o.id = :org
                   LEFT JOIN notification_settings ns ON ns.user_id = u.id
-                 WHERE """ + MATCH.formatted(categoryMatch) + " AND " + settingCheck, p, "MANUAL", noticeId, title);
+                 WHERE """ + MATCH.formatted(categoryMatch) + " AND " + settingCheck, p, "MANUAL", noticeId, title, urgent);
     }
 
     /**
@@ -83,17 +83,17 @@ public class NotificationService {
                   JOIN organizations o ON o.id = :org
                   LEFT JOIN notification_settings ns ON ns.user_id = u.id
                  WHERE """ + MATCH.formatted("") + " AND COALESCE(ns.new_notice, TRUE)", p, "CRAWLED",
-                e.noticeId(), e.title());
+                e.noticeId(), e.title(), false);
     }
 
     /** Inserts the notification rows and asks {@link PushSender} to push to the same recipients after the commit. */
     private int insertAndPush(String insertSql, MapSqlParameterSource params, String source, long noticeId,
-                              String title) {
+                              String title, boolean urgent) {
         List<Recipient> rows = jdbc.query(insertSql + " RETURNING user_id, body", params,
                 (rs, i) -> new Recipient(rs.getLong("user_id"), rs.getString("body")));
         if (!rows.isEmpty()) {
             String pushTitle = "[" + rows.get(0).body() + "] "
-                    + ("URGENT".equals(params.getValue("type")) ? "긴급 공지" : "새 공지");
+                    + (urgent ? "긴급 공지" : "새 공지");
             events.publishEvent(new PushRequested(rows.stream().map(Recipient::userId).toList(), pushTitle,
                     title, "/notices/" + source.toLowerCase() + "/" + noticeId));
         }

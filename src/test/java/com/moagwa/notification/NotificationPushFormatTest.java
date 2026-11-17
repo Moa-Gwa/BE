@@ -52,7 +52,7 @@ class NotificationPushFormatTest {
 
     @Test
     void noRecipientsMeansNoPush() {
-        var org = organizations.saveAndFlush(new Organization("알림 없는 학과", OrganizationType.DEPARTMENT));
+        var org = organizations.saveAndFlush(new Organization("알림 없는 학과 " + UUID.randomUUID(), OrganizationType.DEPARTMENT));
         assertThat(notifications.notifyManual(123, org.getId(), List.of(), "새 공지", false)).isZero();
         assertThat(events.stream(PushRequested.class)).isEmpty();
     }
