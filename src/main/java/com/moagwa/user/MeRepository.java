@@ -4,7 +4,9 @@ import com.moagwa.organization.Organization;
 import com.moagwa.user.MeDto.NotificationSettings;
 import com.moagwa.user.MeDto.NotificationView;
 import java.sql.Timestamp;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -37,18 +39,25 @@ class MeRepository {
         }
     }
 
-    /** 학과의 학과 학생회 id. 학과가 아니거나 학생회가 아직 없으면 null */
-    Long studentGovernmentOf(long departmentId) {
-        String name = jdbc.query("SELECT name FROM organizations WHERE id = :id AND type = 'DEPARTMENT'",
-                new MapSqlParameterSource("id", departmentId), rs -> rs.next() ? rs.getString(1) : null);
-        if (name == null) {
-            return null;
+    /** 학과 id별 학과 학생회 id. 학과가 아니거나 학생회가 아직 없으면 결과에 없음 */
+    Map<Long, Long> studentGovernmentsOf(List<Long> departmentIds) {
+        if (departmentIds.isEmpty()) {
+            return Map.of();
         }
-        return jdbc.query("SELECT id FROM organizations WHERE name = :n AND type = 'STUDENT_GOVERNMENT'",
-                new MapSqlParameterSource("n", Organization.councilNameOf(name)), rs -> rs.next() ? rs.getLong(1) : null);
+        Map<String, Long> departmentByCouncilName = new HashMap<>();
+        jdbc.query("SELECT id, name FROM organizations WHERE id IN (:ids) AND type = 'DEPARTMENT'",
+                new MapSqlParameterSource("ids", departmentIds),
+                rs -> { departmentByCouncilName.put(Organization.councilNameOf(rs.getString("name")), rs.getLong("id")); });
+        Map<Long, Long> councils = new HashMap<>();
+        if (!departmentByCouncilName.isEmpty()) {
+            jdbc.query("SELECT id, name FROM organizations WHERE name IN (:names) AND type = 'STUDENT_GOVERNMENT'",
+                    new MapSqlParameterSource("names", departmentByCouncilName.keySet()),
+                    rs -> { councils.put(departmentByCouncilName.get(rs.getString("name")), rs.getLong("id")); });
+        }
+        return councils;
     }
 
-        int countOrganizations(List<Long> ids, String type) {
+    int countOrganizations(List<Long> ids, String type) {
         Integer found = jdbc.queryForObject("SELECT count(*) FROM organizations WHERE id IN (:ids) AND type = :t",
                 new MapSqlParameterSource().addValue("ids", ids).addValue("t", type), Integer.class);
         return found == null ? 0 : found;

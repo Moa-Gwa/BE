@@ -8,7 +8,9 @@ import com.moagwa.user.MeDto.Profile;
 import com.moagwa.user.MeDto.ProfileUpdate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -46,17 +48,17 @@ class MeService {
         Long after = req.primaryDepartmentId();
         if (!Objects.equals(before, after)) {
             // 주전공을 고르거나 바꾼 순간에만 관심 학과와 학과 학생회를 맞춤. 그 뒤 학생이 해제한 항목은 그대로 둠
+            Map<Long, Long> councils = me.studentGovernmentsOf(Stream.of(before, after).filter(Objects::nonNull).toList());
             departments = new ArrayList<>(departments);
             organizations = new ArrayList<>(organizations);
             if (before != null) {
                 departments.remove(before);
-                organizations.remove(me.studentGovernmentOf(before));
+                organizations.remove(councils.get(before));
             }
             if (after != null) {
                 departments.add(after);
-                Long council = me.studentGovernmentOf(after);
-                if (council != null) {
-                    organizations.add(council);
+                if (councils.containsKey(after)) {
+                    organizations.add(councils.get(after));
                 }
             }
         }
