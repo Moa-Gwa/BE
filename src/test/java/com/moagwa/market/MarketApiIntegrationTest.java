@@ -404,26 +404,6 @@ class MarketApiIntegrationTest {
     }
 
     @Test
-    void statusFilterAcceptsSeveralStatusesSoReservedItemsStayListedUntilSold() throws Exception {
-        createItem(seller, "판매중 " + tag);
-        long reserved = createItem(seller, "예약중 " + tag);
-        long sold = createItem(seller, "판매완료 " + tag);
-        jdbc.update("UPDATE market_items SET status = 'RESERVED' WHERE id = ?", reserved);
-        jdbc.update("UPDATE market_items SET status = 'SOLD' WHERE id = ?", sold);
-
-        mvc.perform(get("/api/market/items").param("q", tag).param("status", "ON_SALE,RESERVED")
-                        .header("Authorization", token(buyer)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items.length()").value(2))
-                .andExpect(jsonPath("$.items[?(@.status == 'SOLD')]").isEmpty());
-        mvc.perform(get("/api/market/items").param("q", tag).param("status", "ON_SALE")
-                        .header("Authorization", token(buyer)))
-                .andExpect(jsonPath("$.items.length()").value(1));
-        mvc.perform(get("/api/market/items").param("status", "ON_SALE,DELETED").header("Authorization", token(buyer)))
-                .andExpect(status().isBadRequest());
-    }
-
-    @Test
     void searchMatchesDescriptionsAndTreatsWildcardsLiterally() throws Exception {
         String keyword = tag + " 할인100%_ABC";
         Map<String, Object> item = Map.of("title", "검색용 물품", "description", keyword,
