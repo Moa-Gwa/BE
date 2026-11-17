@@ -1,5 +1,6 @@
 package com.moagwa.admin;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -28,7 +29,8 @@ final class AdminApplicationDto {
             @NotBlank @Size(max = 3000) String reason,
             @NotBlank
             @Pattern(regexp = "[a-z0-9_-]{4,30}", message = "아이디는 영문 소문자, 숫자, -, _로 4자 이상 30자 이하로 입력해 주세요.")
-            String loginId) {
+            String loginId,
+            @AssertTrue(message = "개인정보 수집, 이용에 동의해 주세요.") boolean privacyAgreed) {
     }
 
     record Submitted(long id, String status) {

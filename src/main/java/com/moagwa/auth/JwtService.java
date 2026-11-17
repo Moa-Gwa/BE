@@ -1,5 +1,6 @@
 package com.moagwa.auth;
 
+import com.moagwa.user.User;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -41,13 +42,19 @@ public class JwtService {
         return decoder;
     }
 
+    /** 로그인, 토큰 갱신용. 재학생 인증과 약관 동의 여부를 DB의 사용자 상태에서 읽음 */
+    public String issueStudent(User user) {
+        return issue(user.getId(), "STUDENT", null, user.isVerified(), false, user.hasConsented());
+    }
+
+    /** 약관에 동의한 학생 토큰. 동의한 학생만 부르는 API(재학생 인증 등)와 테스트에서 씀 */
     public String issueStudent(long userId) {
         return issueStudent(userId, false);
     }
 
     /** verified = 학교 메일로 재학생 인증을 마친 학생. 생활거래 API가 이 값을 확인한다. */
     public String issueStudent(long userId, boolean verified) {
-        return issue(userId, "STUDENT", null, verified);
+        return issue(userId, "STUDENT", null, verified, false, true);
     }
 
     public String issueAdmin(long adminId, long organizationId) {
@@ -56,14 +63,11 @@ public class JwtService {
 
     /** operator = 서비스 운영자. 운영자 전용 API가 이 값을 확인한다. */
     public String issueAdmin(long adminId, long organizationId, boolean operator) {
-        return issue(adminId, "ADMIN", organizationId, false, operator);
+        return issue(adminId, "ADMIN", organizationId, false, operator, false);
     }
 
-    private String issue(long id, String role, Long organizationId, boolean verified) {
-        return issue(id, role, organizationId, verified, false);
-    }
-
-    private String issue(long id, String role, Long organizationId, boolean verified, boolean operator) {
+    private String issue(long id, String role, Long organizationId, boolean verified, boolean operator,
+            boolean consented) {
         Instant now = Instant.now();
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .subject(String.valueOf(id))
@@ -78,6 +82,9 @@ public class JwtService {
         }
         if (operator) {
             claims.claim("operator", true);
+        }
+        if (consented) {
+            claims.claim("consented", true);
         }
         return encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims.build()))
                 .getTokenValue();

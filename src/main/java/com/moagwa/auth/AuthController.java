@@ -193,7 +193,7 @@ class AuthController {
         StudentSession devStudent(@Valid @RequestBody DevLogin body, HttpServletResponse response) {
             User user = users.findByAuthProviderAndProviderUserId("DEV", body.nickname())
                     .orElseGet(() -> users.save(new User("DEV", body.nickname(), body.nickname())));
-            refreshSessions.start(jwt.issueStudent(user.getId(), user.isVerified()), response);
+            refreshSessions.start(jwt.issueStudent(user), response);
             return StudentSession.of(user);
         }
     }
@@ -204,7 +204,7 @@ class AuthController {
     }
 
     private StudentSession session(User user, HttpServletResponse response) {
-        refreshSessions.start(jwt.issueStudent(user.getId(), user.isVerified()), response);
+        refreshSessions.start(jwt.issueStudent(user), response);
         return StudentSession.of(user);
     }
 
@@ -228,9 +228,11 @@ class AuthController {
     record AdminSession(String name, OrgInfo organization, boolean operator) {
     }
 
-    record StudentSession(String nickname, boolean onboarded, boolean verified) {
+    /** consented = 현재 버전 약관에 동의함. false면 동의 화면부터 보여 줌 */
+    record StudentSession(String nickname, boolean onboarded, boolean verified, boolean consented) {
         static StudentSession of(User user) {
-            return new StudentSession(user.getNickname(), user.getPrimaryDepartmentId() != null, user.isVerified());
+            return new StudentSession(user.getNickname(), user.getPrimaryDepartmentId() != null, user.isVerified(),
+                    user.hasConsented());
         }
     }
 }

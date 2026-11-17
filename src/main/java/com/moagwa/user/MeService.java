@@ -1,7 +1,10 @@
 package com.moagwa.user;
 
+import com.moagwa.auth.JwtService;
 import com.moagwa.common.exception.ApiException;
 import com.moagwa.reminder.ReminderService;
+import com.moagwa.user.MeDto.ConsentRequest;
+import com.moagwa.user.MeDto.ConsentStatus;
 import com.moagwa.user.MeDto.NotificationList;
 import com.moagwa.user.MeDto.NotificationSettings;
 import com.moagwa.user.MeDto.Profile;
@@ -20,6 +23,7 @@ class MeService {
     private final UserRepository users;
     private final MeRepository me;
     private final ReminderService reminders;
+    private final JwtService jwt;
 
     @Transactional(readOnly = true)
     Profile profile(long userId) {
@@ -86,6 +90,32 @@ class MeService {
     NotificationSettings updateSettings(long userId, NotificationSettings s) {
         me.saveSettings(userId, s);
         return s;
+    }
+
+    @Transactional(readOnly = true)
+    ConsentStatus consent(long userId) {
+        User u = user(userId);
+        return new ConsentStatus(!u.hasConsented(), User.TERMS_VERSION, u.getTermsVersion());
+    }
+
+    /** 동의를 저장하고 동의가 반영된 액세스 토큰을 돌려줌 */
+    @Transactional
+    String agree(long userId, ConsentRequest req) {
+        if (!User.TERMS_VERSION.equals(req.version())) {
+            throw new ApiException(HttpStatus.CONFLICT, "약관이 바뀌었습니다. 새로고침 후 다시 동의해 주세요.");
+        }
+        User u = user(userId);
+        u.consent();
+        return jwt.issueStudent(u);
+    }
+
+    @Transactional
+    void withdraw(long userId) {
+        if (me.hasOngoingTrade(userId)) {
+            throw new ApiException(HttpStatus.CONFLICT,
+                    "진행 중인 거래나 모집 중인 같이 사기가 있어 탈퇴할 수 없습니다. 먼저 정리해 주세요.");
+        }
+        me.deleteUser(userId);
     }
 
     private User user(long userId) {

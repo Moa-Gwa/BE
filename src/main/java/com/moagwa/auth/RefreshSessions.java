@@ -68,7 +68,7 @@ public class RefreshSessions {
         String access;
         if (session.role().equals("STUDENT")) {
             var user = users.findById(session.id()).orElseThrow(RefreshSessions::unauthorized);
-            access = jwt.issueStudent(user.getId(), user.isVerified());
+            access = jwt.issueStudent(user);
         } else {
             var admin = admins.findById(session.id()).filter(a -> a.isActivated())
                     .orElseThrow(RefreshSessions::unauthorized);

@@ -36,8 +36,9 @@ class RefreshSessionTest {
     @Autowired OrganizationRepository organizations;
 
     private Cookie start() {
-        var user = users.save(new User("DEV", UUID.randomUUID().toString(), "refresh"));
-        return start(jwt.issueStudent(user.getId()));
+        var user = new User("DEV", UUID.randomUUID().toString(), "refresh");
+        user.consent();
+        return start(jwt.issueStudent(users.save(user).getId()));
     }
 
     private Cookie start(String accessToken) {

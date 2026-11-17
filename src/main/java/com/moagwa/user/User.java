@@ -15,6 +15,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class User {
 
+    /** 현재 이용약관, 개인정보 수집/이용 동의 문서 버전. 문서를 바꾸면 올려서 모든 학생에게 다시 동의를 받음 */
+    public static final String TERMS_VERSION = "2026-11-17";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -37,6 +40,12 @@ public class User {
     @Column(name = "verified_at")
     private java.time.Instant verifiedAt;
 
+    @Column(name = "terms_version")
+    private String termsVersion;
+
+    @Column(name = "terms_agreed_at")
+    private java.time.Instant termsAgreedAt;
+
     public User(String authProvider, String providerUserId, String nickname) {
         this.authProvider = authProvider;
         this.providerUserId = providerUserId;
@@ -45,6 +54,15 @@ public class User {
 
     public boolean isVerified() {
         return verifiedAt != null;
+    }
+
+    public boolean hasConsented() {
+        return TERMS_VERSION.equals(termsVersion);
+    }
+
+    public void consent() {
+        this.termsVersion = TERMS_VERSION;
+        this.termsAgreedAt = java.time.Instant.now();
     }
 
     public void updateProfile(String nickname, Long primaryDepartmentId, Integer admissionYear) {

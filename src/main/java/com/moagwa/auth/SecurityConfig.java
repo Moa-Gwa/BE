@@ -29,9 +29,13 @@ class SecurityConfig {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         // role 클레임은 ROLE_STUDENT / ROLE_ADMIN, verified 클레임(재학생 인증 완료)은 ROLE_VERIFIED,
         // operator 클레임(서비스 운영자)은 ROLE_OPERATOR가 된다.
+        // 약관에 동의하지 않은 학생은 ROLE_UNCONSENTED만 받아 동의, 탈퇴 API 외에는 403이 된다.
         converter.setJwtGrantedAuthoritiesConverter(jwtToken -> {
             List<GrantedAuthority> granted = new ArrayList<>();
             String role = jwtToken.getClaimAsString("role");
+            if ("STUDENT".equals(role) && !Boolean.TRUE.equals(jwtToken.getClaim("consented"))) {
+                return List.of(new SimpleGrantedAuthority("ROLE_UNCONSENTED"));
+            }
             if (role != null) {
                 granted.add(new SimpleGrantedAuthority("ROLE_" + role));
             }
@@ -61,6 +65,8 @@ class SecurityConfig {
                         .requestMatchers("/api/admin/date-corrections/**").hasRole("OPERATOR")
                         .requestMatchers(HttpMethod.POST, "/api/admin-applications").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/me/consent").hasAnyRole("STUDENT", "UNCONSENTED")
+                        .requestMatchers(HttpMethod.DELETE, "/api/me").hasAnyRole("STUDENT", "UNCONSENTED")
                         .requestMatchers("/api/market/**", "/api/me/market/**").hasRole("VERIFIED")
                         .requestMatchers("/ws", "/api/chats/**", "/api/me/chats").hasRole("VERIFIED")
                         .requestMatchers("/api/me/**").hasRole("STUDENT")
