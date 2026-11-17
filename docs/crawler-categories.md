@@ -23,9 +23,9 @@
 
 기존 수집 파이프라인에서 신규 공지에 매핑을 적용한다. 목록에서 다시 발견된 기존 공지는 category가 NULL인 경우에만 채운다. 인스타그램과 직접 등록 공지의 기존 분류도 덮어쓰지 않는다. 현재 목록에 나오지 않는 과거 공지는 미분류로 남는다.
 
-## 적용 전후 확인
+## 미분류 현황 확인
 
-운영 DB와 로컬 DB는 별도로 확인한다. 운영에서는 아래 조회로 미분류 건수를 확인한다.
+운영 DB와 로컬 DB는 별도로 확인한다. 아래 조회로 미분류 건수를 확인한다.
 
 ```sql
 SELECT s.id, s.code, o.name, COUNT(c.id) FILTER (WHERE c.category IS NULL) AS uncategorized
@@ -39,4 +39,4 @@ SELECT category,COUNT(*) FROM crawled_notices GROUP BY category ORDER BY COUNT(*
 SELECT COUNT(*) FROM crawled_notices WHERE title LIKE '%장학%' AND category IS NULL;
 ```
 
-적용 후 `/api/feed?category=SCHOLARSHIP`과 공지 상세 응답을 확인한다. 분류 근거를 얻지 못한 공지는 남겨둔다. 분류 보완은 신규 공지가 아니므로 푸시·조회수 증가를 유발하지 않는다.
+분류 결과는 `/api/feed?category=SCHOLARSHIP`과 공지 상세 응답으로 확인한다. 분류 근거를 얻지 못한 공지는 미분류로 남긴다. 정기 수집의 분류 보완은 신규 공지가 아니므로 푸시와 조회수 증가를 유발하지 않는다.
