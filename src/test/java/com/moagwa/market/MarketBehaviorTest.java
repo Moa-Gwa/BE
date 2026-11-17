@@ -93,8 +93,6 @@ class MarketBehaviorTest {
         User student = unverifiedUser("repeat-" + tag);
         String email = "repeat" + tag + "@catholic.ac.kr";
 
-        mvc.perform(get("/api/me/verification").header("Authorization", plainToken(student)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.verified").value(false));
         confirm(student, "123456").andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("먼저 인증 코드를 받아 주세요."));
 

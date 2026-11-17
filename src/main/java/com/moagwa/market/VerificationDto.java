@@ -17,9 +17,6 @@ final class VerificationDto {
     record ConfirmRequest(@NotBlank @Pattern(regexp = "^\\d{6}$", message = "6자리 숫자여야 합니다.") String code) {
     }
 
-    record Status(boolean verified, String verifiedAt, String schoolEmail) {
-    }
-
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record SendResult(int expiresInSeconds, String devCode) {
     }

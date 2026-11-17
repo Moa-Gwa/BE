@@ -126,9 +126,6 @@ class MarketApiIntegrationTest {
         assertThat(verified).isNotNull();
         assertThat(verified.isHttpOnly()).isTrue();
         mvc.perform(get("/api/market/items").cookie(verified)).andExpect(status().isOk());
-        mvc.perform(get("/api/me/verification").cookie(verified))
-                .andExpect(jsonPath("$.verified").value(true))
-                .andExpect(jsonPath("$.schoolEmail").value("stu***@catholic.ac.kr"));
     }
 
     @Test
