@@ -51,12 +51,14 @@ class CrawlerNotificationTest {
     @Autowired InstagramPersistence instagram;
     @MockBean PageFetcher fetcher;
     CrawlSource source;
+    String organizationName;
     long primary, interested, muted, unrelated;
 
     @BeforeEach void setup() {
         pushes.items.clear();
         String tag = UUID.randomUUID().toString();
         var org = organizations.saveAndFlush(new Organization("알림 회귀 " + tag, OrganizationType.DEPARTMENT));
+        organizationName = org.getName();
         source = sources.saveAndFlush(new CrawlSource("notification-" + tag, org, "https://school.example/list.do"));
         primary = student(org.getId());
         interested = student(null);
@@ -96,6 +98,8 @@ class CrawlerNotificationTest {
         assertThat(recipients(id)).containsExactlyInAnyOrder(primary, interested).doesNotContain(muted, unrelated);
         assertThat(pushes.items).hasSize(1).first().satisfies(push -> {
             assertThat(push.userIds()).containsExactlyInAnyOrder(primary, interested);
+            assertThat(push.title()).isEqualTo("[" + organizationName + "] 새 공지");
+            assertThat(push.body()).isEqualTo("새 학교 공지");
             assertThat(push.url()).isEqualTo("/notices/crawled/" + id);
         });
         assertThat(events.stream(CrawledNoticeCreatedEvent.class)).hasSize(1);
