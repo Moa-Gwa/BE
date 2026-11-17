@@ -41,11 +41,12 @@ class FeedController {
                   @RequestParam(required = false) String category,
                   @RequestParam(required = false) String status,
                   @RequestParam(required = false) String q,
+                  @RequestParam(required = false) String field,
                   @RequestParam(required = false) String sort,
                   @RequestParam(defaultValue = "0") int page,
                   @RequestParam(defaultValue = "20") int size,
                   Authentication auth) {
-        return feed.search(new FeedFilter(orgType, organizationId, category, status, q, sort, null,
+        return feed.search(new FeedFilter(orgType, organizationId, category, status, q, field, sort, null,
                 CurrentUser.studentIdOrNull(auth), page, size));
     }
 
@@ -62,7 +63,7 @@ class FeedController {
         if (me == null) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
         }
-        return feed.search(new FeedFilter(null, null, null, null, null, "latest", me, me, page, size));
+        return feed.search(new FeedFilter(null, null, null, null, null, null, "latest", me, me, page, size));
     }
 
     @GetMapping("/me/bookmarks")

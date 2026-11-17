@@ -128,6 +128,23 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void searchFieldNarrowsToTitleOrBody() throws Exception {
+        createNotice(admin, Map.of("title", "제목어" + tag, "description", "본문어" + tag + " 안내"));
+
+        mvc.perform(get("/api/feed").param("q", "본문어" + tag).param("field", "title"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(0));
+        mvc.perform(get("/api/feed").param("q", "본문어" + tag).param("field", "content"))
+                .andExpect(jsonPath("$.items.length()").value(1));
+        mvc.perform(get("/api/feed").param("q", "제목어" + tag).param("field", "content"))
+                .andExpect(jsonPath("$.items.length()").value(0));
+        mvc.perform(get("/api/feed").param("q", "본문어" + tag))
+                .andExpect(jsonPath("$.items.length()").value(1));
+        mvc.perform(get("/api/feed").param("q", "제목어" + tag).param("field", "title"))
+                .andExpect(jsonPath("$.items.length()").value(1));
+        mvc.perform(get("/api/feed").param("q", tag).param("field", "body")).andExpect(status().isBadRequest());
+    }
+
+    @Test
     void adminCannotTouchAnotherOrganizationsNotice() throws Exception {
         long id = createNotice(admin, Map.of()).get("id").asLong();
 
