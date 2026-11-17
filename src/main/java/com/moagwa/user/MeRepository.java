@@ -1,9 +1,12 @@
 package com.moagwa.user;
 
+import com.moagwa.organization.Organization;
 import com.moagwa.user.MeDto.NotificationSettings;
 import com.moagwa.user.MeDto.NotificationView;
 import java.sql.Timestamp;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -34,6 +37,24 @@ class MeRepository {
             jdbc.update("INSERT INTO user_interests (user_id, kind, target_id) VALUES (:u, :k, :t)",
                     new MapSqlParameterSource().addValue("u", userId).addValue("k", kind).addValue("t", id));
         }
+    }
+
+    /** 학과 id별 학과 학생회 id. 학과가 아니거나 학생회가 아직 없으면 결과에 없음 */
+    Map<Long, Long> studentGovernmentsOf(List<Long> departmentIds) {
+        if (departmentIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Long> departmentByCouncilName = new HashMap<>();
+        jdbc.query("SELECT id, name FROM organizations WHERE id IN (:ids) AND type = 'DEPARTMENT'",
+                new MapSqlParameterSource("ids", departmentIds),
+                rs -> { departmentByCouncilName.put(Organization.councilNameOf(rs.getString("name")), rs.getLong("id")); });
+        Map<Long, Long> councils = new HashMap<>();
+        if (!departmentByCouncilName.isEmpty()) {
+            jdbc.query("SELECT id, name FROM organizations WHERE name IN (:names) AND type = 'STUDENT_GOVERNMENT'",
+                    new MapSqlParameterSource("names", departmentByCouncilName.keySet()),
+                    rs -> { councils.put(departmentByCouncilName.get(rs.getString("name")), rs.getLong("id")); });
+        }
+        return councils;
     }
 
     int countOrganizations(List<Long> ids, String type) {

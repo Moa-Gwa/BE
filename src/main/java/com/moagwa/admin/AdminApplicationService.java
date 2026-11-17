@@ -79,22 +79,24 @@ class AdminApplicationService {
     }
 
     @Transactional
-    Approved approve(long id) {
+    Approved approve(long id, String organizationName) {
         Application a = applications.lock(id).orElseThrow(() -> ApiException.notFound("신청을 찾을 수 없습니다."));
+        // 운영자가 고친 이름이 있으면 그 이름으로 단체를 만듦
+        String name = organizationName == null || organizationName.isBlank() ? a.organizationName() : organizationName.strip();
         if (!a.pending()) {
             throw new ApiException(HttpStatus.CONFLICT, "이미 처리된 신청입니다.");
         }
         if (admins.existsByLoginIdIgnoreCase(a.loginId())) {
             throw new ApiException(HttpStatus.CONFLICT, "같은 아이디의 관리자 계정이 이미 있습니다.");
         }
-        if (organizations.findByName(a.organizationName()).isPresent()) {
+        if (organizations.findByName(name).isPresent()) {
             throw new ApiException(HttpStatus.CONFLICT, "같은 이름의 조직이 이미 있습니다.");
         }
 
         Organization org;
         Admin admin;
         try {
-            org = organizations.save(verifiedOrganization(a));
+            org = organizations.save(verifiedOrganization(a, name));
             // 비밀번호는 담당자가 설정 링크로 정하기 전까지 아무도 모르는 값으로 둠
             admin = admins.save(Admin.awaitingSetup(a.loginId(), encoder.encode(UUID.randomUUID().toString()),
                     a.contactName(), org));
@@ -176,8 +178,8 @@ class AdminApplicationService {
         }
     }
 
-    private static Organization verifiedOrganization(Application a) {
-        Organization org = new Organization(a.organizationName(), OrganizationType.STUDENT_GOVERNMENT);
+    private static Organization verifiedOrganization(Application a, String name) {
+        Organization org = new Organization(name, OrganizationType.STUDENT_GOVERNMENT);
         org.markVerified();
         org.updateInfo("대학: " + a.university() + " · " + a.department(), null, a.channelUrl());
         return org;

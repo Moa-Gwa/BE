@@ -47,6 +47,10 @@ final class AdminApplicationDto {
     record Rejection(@Size(max = 500) String reason) {
     }
 
+    /** 승인 시 단체 이름을 고칠 때만 보냄(예: 학과 학생회를 "학과명 학생회" 형식으로 맞춰 학과와 연결) */
+    record Approval(@Size(max = 100) String organizationName) {
+    }
+
     /** 반려 안내 메일을 못 보내도 반려는 처리됨 */
     record Rejected(boolean mailSent) {
     }
