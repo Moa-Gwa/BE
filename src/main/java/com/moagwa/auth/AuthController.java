@@ -79,9 +79,10 @@ class AuthController {
                 .filter(Admin::isActivated)
                 .filter(a -> encoder.matches(body.password(), a.getPasswordHash()))
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다."));
-        var org = admin.getOrganization();
         boolean operator = admin.isOperator() || operatorLoginIds.stream().map(String::trim)
                 .anyMatch(admin.getLoginId()::equals);
+        refreshSessions.moveOperator(admin, operator);
+        var org = admin.getOrganization();
         refreshSessions.start(jwt.issueAdmin(admin.getId(), org.getId(), operator), response);
         return new AdminSession(admin.getName(), new OrgInfo(org.getId(), org.getName(), org.getType().name()),
                 operator);

@@ -70,6 +70,11 @@ public class Admin {
         return "OPERATOR".equals(role);
     }
 
+    /** 설정으로 운영자가 된 계정을 운영자 단체로 옮김 */
+    public void moveTo(Organization organization) {
+        this.organization = organization;
+    }
+
     void grantOperator() {
         this.role = "OPERATOR";
     }
