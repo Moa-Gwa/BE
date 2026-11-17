@@ -1,6 +1,7 @@
 package com.moagwa.reminder;
 
 import com.moagwa.auth.CurrentUser;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.util.Locale;
@@ -22,6 +23,7 @@ class ReminderController {
 
     private final ReminderService service;
 
+    @Schema(name = "ReminderInput")
     record Input(@NotNull Boolean enabled) {}
 
     @GetMapping

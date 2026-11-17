@@ -1,6 +1,7 @@
 package com.moagwa.feed;
 
 import com.moagwa.auth.CurrentUser;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 class ScheduleColorController {
     private final ScheduleColors colors;
+    @Schema(name = "ScheduleColorInput")
     record Input(@NotBlank String type, @Pattern(regexp="^#[0-9A-Fa-f]{6}$") String color) {}
 
     @PutMapping("/{source}/{id}")

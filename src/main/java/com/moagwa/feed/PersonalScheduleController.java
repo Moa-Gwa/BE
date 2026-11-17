@@ -2,6 +2,7 @@ package com.moagwa.feed;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.moagwa.auth.CurrentUser;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -22,6 +23,7 @@ class PersonalScheduleController {
     private final PersonalScheduleService service;
 
     // color 누락=기존 유지, null=기본값 초기화 구분용
+    @Schema(name = "PersonalScheduleInput")
     static class Input {
         @NotBlank @Size(max = 100) private String title;
         @NotNull private Instant at;

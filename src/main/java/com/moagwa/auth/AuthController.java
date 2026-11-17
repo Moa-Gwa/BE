@@ -9,6 +9,7 @@ import com.moagwa.common.exception.ApiException;
 import com.moagwa.user.User;
 import com.moagwa.user.ConsentRepository;
 import com.moagwa.user.UserRepository;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -225,6 +226,7 @@ class AuthController {
     record DevLogin(@NotBlank String nickname) {
     }
 
+    @Schema(name = "AdminSessionOrganization")
     record OrgInfo(long id, String name, String type) {
     }
 

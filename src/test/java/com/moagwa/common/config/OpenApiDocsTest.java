@@ -62,6 +62,51 @@ class OpenApiDocsTest {
         assertThat(docs.keySet()).as("없는 API를 가리키는 설명").isSubsetOf(operations);
     }
 
+    /** 사진 업로드는 Swagger에서 파일을 고를 수 있게 multipart 본문으로 문서화 */
+    @Test
+    void 사진_업로드는_파일_선택이_가능한_multipart_본문이다() throws Exception {
+        JsonNode paths = docs().get("paths");
+        for (String path : List.of("/api/admin/uploads/images", "/api/market/uploads/images")) {
+            JsonNode op = paths.get(path).get("post");
+            JsonNode files = op.at("/requestBody/content/multipart~1form-data/schema/properties/files");
+            assertThat(files.path("type").asText()).as(path).isEqualTo("array");
+            assertThat(files.at("/items/format").asText()).as(path).isEqualTo("binary");
+            assertThat(op.path("parameters").findValuesAsText("name")).as(path).doesNotContain("files");
+        }
+    }
+
+    /** 클래스 이름이 같은 요청·응답 형식(Input, OrgInfo)이 하나로 합쳐져 다른 API의 형식으로 보이지 않게 함 */
+    @Test
+    void 이름이_같은_요청과_응답_형식이_API마다_따로_문서화된다() throws Exception {
+        JsonNode root = docs();
+        assertThat(bodyFields(root, "/api/me/reminders/{source}/{id}", "put")).containsExactly("enabled");
+        assertThat(bodyFields(root, "/api/me/schedule-colors/{source}/{id}", "put")).containsExactlyInAnyOrder("type", "color");
+        assertThat(bodyFields(root, "/api/me/schedules", "post")).contains("title", "at", "reminderEnabled");
+
+        JsonNode schemas = root.at("/components/schemas");
+        assertThat(fields(schemas.at("/AdminSessionOrganization"))).containsExactlyInAnyOrder("id", "name", "type");
+        assertThat(fields(schemas.at("/AdminOrganization"))).contains("description", "verified");
+        assertThat(schemas.has("Input")).isFalse();
+        assertThat(schemas.has("OrgInfo")).isFalse();
+    }
+
+    private JsonNode docs() throws Exception {
+        return json.readTree(mvc.perform(get("/v3/api-docs")).andReturn().getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    private static List<String> bodyFields(JsonNode root, String path, String method) {
+        String ref = root.at("/paths").get(path).get(method)
+                .at("/requestBody/content/application~1json/schema/$ref").asText();
+        return fields(root.at("/components/schemas/" + ref.substring(ref.lastIndexOf('/') + 1)));
+    }
+
+    private static List<String> fields(JsonNode schema) {
+        List<String> names = new ArrayList<>();
+        schema.path("properties").fieldNames().forEachRemaining(names::add);
+        return names;
+    }
+
     @Test
     void 스웨거_화면도_로그인_없이_열린다() throws Exception {
         mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
