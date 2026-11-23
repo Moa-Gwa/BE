@@ -2,6 +2,7 @@ package com.moagwa.chatbot;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -31,7 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** 챗봇 서비스를 로컬 가짜 서버로 바꿔 중계, 대화 소유 확인, 질문 한도 없음을 검증함 */
+/** 챗봇 서비스를 로컬 가짜 서버로 바꿔 중계, 대화 소유 확인, 질문 한도를 검증함 */
 @SpringBootTest
 @AutoConfigureMockMvc
 class ChatbotRelayTest {
@@ -55,6 +56,8 @@ class ChatbotRelayTest {
     static void chatbot(DynamicPropertyRegistry registry) {
         registry.add("moagwa.chatbot.url", () -> "http://127.0.0.1:" + CHATBOT.getAddress().getPort());
         registry.add("moagwa.chatbot.internal-token", () -> "test-internal-token");
+        registry.add("moagwa.chatbot.per-minute", () -> "2");
+        registry.add("moagwa.chatbot.per-day", () -> "3");
     }
 
     private static HttpServer start() {
@@ -138,20 +141,17 @@ class ChatbotRelayTest {
     }
 
     @Test
-    void hasNoQuestionLimitButRecordsUsage() throws Exception {
-        // 예전 하루 한도(30회)를 이미 넘긴 학생도, 1분 안에 연달아 묻는 질문도 모두 챗봇으로 넘어감
-        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
-        jdbc.update("INSERT INTO chatbot_usage (user_id, day, count) VALUES (?, ?, 30)", other.getId(), today);
-        for (int i = 0; i < 6; i++) {
-            assertThat(stream("/api/me/chatbot", me, "{\"question\":\"질문" + i + "\"}")).contains("event:done");
-        }
-        assertThat(stream("/api/me/chatbot", other, "{\"question\":\"한도 넘긴 학생\"}")).contains("event:done");
+    void limitsQuestionsPerMinuteAndPerDay() throws Exception {
+        stream("/api/me/chatbot", me, "{\"question\":\"하나\"}");
+        stream("/api/me/chatbot", me, "{\"question\":\"둘\"}");
+        call("/api/me/chatbot", me, "{\"question\":\"셋\"}").andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("질문이 너무 빨라요. 1분 뒤에 다시 물어봐 주세요."));
 
-        assertThat(received).hasSize(7);
-        assertThat(jdbc.queryForObject("SELECT count FROM chatbot_usage WHERE user_id = ? AND day = ?", Integer.class,
-                me.getId(), today)).isEqualTo(6);
-        assertThat(jdbc.queryForObject("SELECT count FROM chatbot_usage WHERE user_id = ? AND day = ?", Integer.class,
-                other.getId(), today)).isEqualTo(31);
+        jdbc.update("INSERT INTO chatbot_usage (user_id, day, count) VALUES (?, ?, 3)", other.getId(),
+                LocalDate.now(ZoneId.of("Asia/Seoul")));
+        call("/api/me/chatbot", other, "{\"question\":\"넷\"}").andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("오늘 질문 3회를 다 썼어요. 내일 다시 물어봐 주세요."));
+        assertThat(received).hasSize(2);
     }
 
     @Test
