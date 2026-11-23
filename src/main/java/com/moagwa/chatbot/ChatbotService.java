@@ -15,8 +15,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +32,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * 챗봇 서비스 호출과 질문 한도. 챗봇 서비스에는 학생 구분이 없어, 의도 확인(clarify)에서 멈춘 대화(thread)를
+ * 챗봇 서비스 호출. 챗봇 서비스에는 학생 구분이 없어, 의도 확인(clarify)에서 멈춘 대화(thread)를
  * 여기서 학생과 묶어 본인만 이어서 진행하게 함.
  */
 @Slf4j
@@ -53,29 +51,19 @@ class ChatbotService {
     private final Clock clock;
     private final RestClient http;
     private final boolean enabled;
-    private final int perMinute;
-    private final int perDay;
-    private final int totalPerDay;
     private final Map<String, Owner> threads = new ConcurrentHashMap<>();
-    // shortcut: 1분 한도와 대화 소유 정보는 이 서버 메모리에만 있음. BE를 여러 대로 늘리면 DB로 옮겨야 함
-    private final Map<Long, Deque<Instant>> recent = new HashMap<>();
-    // shortcut: 답변을 읽는 동안 요청마다 스레드 하나를 씀. 학생별, 전체 하루 한도로 동시 사용량이 묶여 있어 고정 크기 풀 대신 씀
+    // shortcut: 대화 소유 정보는 이 서버 메모리에만 있음. BE를 여러 대로 늘리면 DB로 옮겨야 함
+    // shortcut: 답변을 읽는 동안 요청마다 스레드 하나를 씀. 질문 한도가 없어 동시 사용량만큼 스레드가 늘어남
     private final ExecutorService relays = Executors.newCachedThreadPool();
 
     ChatbotService(ChatbotRepository repository, ObjectMapper json, Clock clock,
                    @Value("${moagwa.chatbot.url:}") String url,
                    @Value("${moagwa.chatbot.internal-token:}") String token,
-                   @Value("${moagwa.chatbot.read-timeout:PT30S}") Duration readTimeout,
-                   @Value("${moagwa.chatbot.per-minute:5}") int perMinute,
-                   @Value("${moagwa.chatbot.per-day:30}") int perDay,
-                   @Value("${moagwa.chatbot.total-per-day:400}") int totalPerDay) {
+                   @Value("${moagwa.chatbot.read-timeout:PT30S}") Duration readTimeout) {
         this.repository = repository;
         this.json = json;
         this.clock = clock;
         this.enabled = !url.isBlank() && !token.isBlank();
-        this.perMinute = perMinute;
-        this.perDay = perDay;
-        this.totalPerDay = totalPerDay;
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(3));
         factory.setReadTimeout(readTimeout); // 글자 사이 대기 한도. 모델이 멈추면 학생이 끝없이 기다리지 않게 함
@@ -85,12 +73,12 @@ class ChatbotService {
 
     SseEmitter ask(long userId, ChatRequest req) {
         requireEnabled();
-        claim(userId);
+        repository.recordQuestion(userId, LocalDate.ofInstant(clock.instant(), SEOUL)); // 한도 없이 사용량만 기록
         Map<String, Object> body = Map.of("question", req.question(), "history", Objects.requireNonNullElse(req.history(), List.of()));
         return relay(userId, "/v1/chat", body);
     }
 
-    /** 확인 응답은 질문 한도에 세지 않음 */
+    /** 확인 응답은 질문 수에 세지 않음 */
     SseEmitter resume(long userId, String threadId, ResumeRequest req) {
         requireEnabled();
         Owner owner = threads.get(threadId);
@@ -112,29 +100,6 @@ class ChatbotService {
     private void requireEnabled() {
         if (!enabled) {
             throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "챗봇을 아직 쓸 수 없어요.");
-        }
-    }
-
-    private void claim(long userId) {
-        Instant now = clock.instant();
-        synchronized (recent) {
-            Deque<Instant> times = recent.computeIfAbsent(userId, id -> new ArrayDeque<>());
-            while (!times.isEmpty() && times.peekFirst().isBefore(now.minusSeconds(60))) {
-                times.pollFirst();
-            }
-            if (times.size() >= perMinute) {
-                throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "질문이 너무 빨라요. 1분 뒤에 다시 물어봐 주세요.");
-            }
-            times.addLast(now);
-            recent.values().removeIf(t -> t.peekLast().isBefore(now.minusSeconds(60))); // 오래 쉰 학생 기록 정리
-        }
-        LocalDate today = LocalDate.ofInstant(now, SEOUL);
-        // shortcut: 전체 한도는 확인 후 기록이라 동시 요청 몇 건만큼 넘을 수 있음. 비용 상한 용도라 허용
-        if (repository.totalQuestions(today) >= totalPerDay) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "오늘 챗봇 이용이 많아 잠시 쉬고 있어요. 내일 다시 물어봐 주세요.");
-        }
-        if (!repository.claimQuestion(userId, today, perDay)) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "오늘 질문 " + perDay + "회를 다 썼어요. 내일 다시 물어봐 주세요.");
         }
     }
 

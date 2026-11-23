@@ -70,10 +70,6 @@ moagwa:
     # 클러스터 안 챗봇 서비스 주소와 내부 토큰. 둘 중 하나라도 비면 챗봇 API는 503
     url: ${CHATBOT_URL:}
     internal-token: ${CHATBOT_INTERNAL_TOKEN:}
-    # 학생별 1분, 하루 질문 수와 서비스 전체 하루 질문 수(Gemini 무료 한도 보호, 질문 1건에 모델 호출 약 2회)
-    per-minute: 5
-    per-day: 30
-    total-per-day: ${CHATBOT_TOTAL_PER_DAY:400}
 
 crawler:
   enabled: ${CRAWLER_ENABLED:true}

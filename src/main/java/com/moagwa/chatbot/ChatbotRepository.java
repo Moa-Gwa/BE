@@ -13,19 +13,12 @@ import org.springframework.stereotype.Repository;
 class ChatbotRepository {
     private final NamedParameterJdbcTemplate jdbc;
 
-    /** 하루 한도 안이면 질문 수를 1 올리고 true. 단일 UPSERT라 동시 요청에도 한도를 넘지 않음 */
-    boolean claimQuestion(long user, LocalDate day, int dailyLimit) {
-        return jdbc.update("""
+    /** 학생별 하루 질문 수를 1 올림. 한도 없이 사용량 확인용으로만 남김 */
+    void recordQuestion(long user, LocalDate day) {
+        jdbc.update("""
                 INSERT INTO chatbot_usage (user_id, day, count) VALUES (:u, :d, 1)
                 ON CONFLICT (user_id, day) DO UPDATE SET count = chatbot_usage.count + 1
-                WHERE chatbot_usage.count < :limit
-                """, new MapSqlParameterSource().addValue("u", user).addValue("d", day).addValue("limit", dailyLimit)) > 0;
-    }
-
-    int totalQuestions(LocalDate day) {
-        Integer total = jdbc.queryForObject("SELECT COALESCE(SUM(count), 0) FROM chatbot_usage WHERE day = :d",
-                new MapSqlParameterSource("d", day), Integer.class);
-        return total == null ? 0 : total;
+                """, new MapSqlParameterSource().addValue("u", user).addValue("d", day));
     }
 
     void saveFeedback(String rating, List<String> sourceUrls) {
