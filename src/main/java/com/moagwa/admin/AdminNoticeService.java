@@ -97,6 +97,17 @@ public class AdminNoticeService {
         return view(n, clock.instant());
     }
 
+    /** 게시 중인 공지의 알림을 처음 게시할 때와 같은 대상에게 다시 보내고 받은 학생 수를 돌려줌 */
+    @Transactional
+    public int renotify(CurrentUser me, long id) {
+        Notice n = owned(me, id);
+        if (n.getStatus() != NoticeStatus.PUBLISHED) {
+            throw ApiException.badRequest("게시 중인 공지만 알림을 다시 보낼 수 있습니다.");
+        }
+        return notifications.notifyManual(n.getId(), n.getOrganization().getId(),
+                n.getCategories().stream().map(Category::getId).toList(), n.getTitle(), n.isUrgent());
+    }
+
     @Transactional
     public void delete(CurrentUser me, long id) {
         Notice n = owned(me, id);

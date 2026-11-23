@@ -211,6 +211,10 @@
     "description": "게시한 공지를 마감합니다.",
     "summary": "게시한 공지를 마감"
   },
+  "POST /api/admin/notices/{id}/renotify": {
+    "description": "게시 중인 공지의 알림과 푸시를 처음 게시할 때와 같은 대상(필수 기관, 소속 학과, 관심 기관·카테고리, 알림 설정 반영)에게 다시 보냅니다. 응답의 recipients는 알림을 받은 학생 수입니다.",
+    "summary": "게시 중인 공지의 알림 다시 보내기"
+  },
   "POST /api/admin/notices/{id}/duplicate": {
     "description": "기존 공지를 복제해 새 초안을 만듭니다.",
     "summary": "기존 공지를 복제해 새 초안을 만듭니다"
