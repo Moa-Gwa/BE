@@ -83,6 +83,11 @@ class AdminController {
         return service.close(CurrentUser.from(auth), id);
     }
 
+    @PostMapping("/notices/{id}/renotify")
+    Map<String, Integer> renotify(@PathVariable long id, Authentication auth) {
+        return Map.of("recipients", service.renotify(CurrentUser.from(auth), id));
+    }
+
     @PostMapping("/notices/{id}/duplicate")
     @ResponseStatus(HttpStatus.CREATED)
     AdminNoticeView duplicate(@PathVariable long id, Authentication auth) {
