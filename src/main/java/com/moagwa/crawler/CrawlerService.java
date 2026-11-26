@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -101,7 +102,9 @@ public class CrawlerService {
         int created = 0;
         for (ListItem item : fresh) {
             Instant now = clock.instant();
+            // 목록 날짜가 미래로 잘못 표시되면 피드 맨 위에 계속 고정되므로 수집 시각으로 대체
             Instant publishedAt = item.publishedDate() != null
+                    && !item.publishedDate().isAfter(LocalDate.ofInstant(now, KST))
                     ? item.publishedDate().atStartOfDay(KST).toInstant()
                     : now;
             Optional<DetailContent> content = fetchDetail(source, item.url());
