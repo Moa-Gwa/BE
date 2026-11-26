@@ -156,6 +156,30 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void sameDayBoardNoticesAlternateBetweenOrganizationTypes() throws Exception {
+        Organization dept = organizations.save(new Organization("학과-" + tag, OrganizationType.DEPARTMENT));
+        CrawlSource councilBoard = sources.save(new CrawlSource("mix-c-" + tag, council, "https://example.com/c"));
+        CrawlSource deptBoard = sources.save(new CrawlSource("mix-d-" + tag, dept, "https://example.com/d"));
+        Instant day = Instant.now().minus(Duration.ofDays(1)).truncatedTo(java.time.temporal.ChronoUnit.DAYS);
+        // 한 게시판씩 몰아서 수집된 상황
+        for (int i = 0; i < 3; i++) {
+            crawled.save(new CrawledNotice(councilBoard, "c" + i, "섞기" + tag, "https://example.com/c" + i, false, day, day));
+        }
+        for (int i = 0; i < 3; i++) {
+            crawled.save(new CrawledNotice(deptBoard, "d" + i, "섞기" + tag, "https://example.com/d" + i, false, day, day));
+        }
+
+        String body = mvc.perform(get("/api/feed").param("q", "섞기" + tag)).andExpect(status().isOk()).andReturn()
+                .getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        List<String> types = new java.util.ArrayList<>();
+        json.readTree(body).get("items").forEach(item -> types.add(item.get("organization").get("type").asText()));
+        assertThat(types).hasSize(6);
+        for (int i = 1; i < types.size(); i++) {
+            assertThat(types.get(i)).as("index %d", i).isNotEqualTo(types.get(i - 1));
+        }
+    }
+
+    @Test
     void adminCannotTouchAnotherOrganizationsNotice() throws Exception {
         long id = createNotice(admin, Map.of()).get("id").asLong();
 

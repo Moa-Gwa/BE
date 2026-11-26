@@ -191,6 +191,19 @@ class CrawlerServiceTest {
         assertThat(jdbc.queryForObject("SELECT thumbnail_url FROM crawled_notices WHERE id = ?", String.class, id)).isEqualTo("https://cdn.example/instagram.jpg");
     }
 
+    @Test
+    void futureListDateFallsBackToCrawlTime() throws IOException {
+        doReturn(load("catholic-detail.html", LIST_URL)).when(fetcher).fetch(anyString());
+        Document list = load("catholic-list.html", LIST_URL);
+        list.select(source.getDateSelector()).forEach(el -> el.text("2099.01.01"));
+        doReturn(list).when(fetcher).fetch(LIST_URL);
+
+        crawler.crawlSource(source);
+
+        assertThat(mine()).isNotEmpty()
+                .allMatch(n -> n.getPublishedAt().isBefore(java.time.Instant.now().plusSeconds(60)));
+    }
+
     private void stubSite() throws IOException {
         doReturn(load("catholic-detail.html", LIST_URL)).when(fetcher).fetch(anyString());
         doReturn(load("catholic-list.html", LIST_URL)).when(fetcher).fetch(LIST_URL);
