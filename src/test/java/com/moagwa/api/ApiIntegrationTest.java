@@ -230,8 +230,28 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.items.length()").value(1));
         mvc.perform(get("/api/feed").param("q", tag).param("status", "UPCOMING"))
                 .andExpect(jsonPath("$.items.length()").value(0));
-        MvcResult now = mvc.perform(get("/api/feed/now")).andExpect(status().isOk()).andReturn();
-        assertThat(now.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8)).contains("곧마감 " + tag);
+    }
+
+    @Test
+    void nowFeedShowsUrgentToEveryoneAndTimelyNoticesOnlyFromInterests() throws Exception {
+        String soon = Instant.now().plus(Duration.ofHours(5)).toString();
+        createNotice(admin, Map.of("title", "관심곧마감 " + tag, "deadlineAt", soon));
+        createNotice(otherAdmin, Map.of("title", "무관곧마감 " + tag, "deadlineAt", soon));
+        createNotice(otherAdmin, Map.of("title", "무관긴급 " + tag, "urgent", true));
+        mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("nickname", "민지", "organizationIds",
+                                List.of(council.getId()), "categoryIds", List.of()))))
+                .andExpect(status().isOk());
+
+        String guest = mvc.perform(get("/api/feed/now")).andExpect(status().isOk()).andReturn()
+                .getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(guest).contains("무관긴급 " + tag).doesNotContain("관심곧마감 " + tag, "무관곧마감 " + tag);
+
+        String mine = mvc.perform(get("/api/feed/now").header("Authorization", studentToken()))
+                .andExpect(status().isOk()).andReturn()
+                .getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(mine).contains("무관긴급 " + tag, "관심곧마감 " + tag).doesNotContain("무관곧마감 " + tag);
     }
 
     @Test
