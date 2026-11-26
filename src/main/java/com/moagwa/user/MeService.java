@@ -133,13 +133,15 @@ class MeService {
     }
 
     @Transactional
-    void withdraw(long userId) {
-        users.findByIdForUpdate(userId).orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
+    User withdraw(long userId) {
+        User u = users.findByIdForUpdate(userId)
+                .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "사용자를 찾을 수 없습니다."));
         if (me.hasOngoingTrade(userId)) {
             throw new ApiException(HttpStatus.CONFLICT,
                     "진행 중인 거래나 모집 중인 같이 사기가 있어 탈퇴할 수 없습니다. 먼저 정리해 주세요.");
         }
         me.deleteUser(userId);
+        return u;
     }
 
     private User user(long userId) {
