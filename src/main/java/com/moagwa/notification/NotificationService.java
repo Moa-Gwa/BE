@@ -39,8 +39,9 @@ public class NotificationService {
         String type = urgent ? "URGENT" : "NEW_NOTICE";
         String settingCheck = urgent ? "COALESCE(ns.urgent, TRUE)" : "COALESCE(ns.new_notice, TRUE)";
         String categoryMatch = categoryIds.isEmpty() ? ""
-                : "OR EXISTS (SELECT 1 FROM user_interests uc WHERE uc.user_id = u.id AND uc.kind = 'CATEGORY' "
-                + "AND uc.target_id IN (:cats))";
+                // 관심 카테고리는 학교 전체(대학) 공지에만 적용. 피드의 나를 위한 공지와 같은 기준
+                : "OR (o.type = 'UNIVERSITY' AND EXISTS (SELECT 1 FROM user_interests uc WHERE uc.user_id = u.id "
+                + "AND uc.kind = 'CATEGORY' AND uc.target_id IN (:cats)))";
         MapSqlParameterSource p = new MapSqlParameterSource()
                 .addValue("org", organizationId).addValue("nid", noticeId).addValue("title", title)
                 .addValue("type", type).addValue("source", "MANUAL");

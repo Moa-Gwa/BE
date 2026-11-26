@@ -156,6 +156,57 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void sameDayBoardNoticesAlternateBetweenOrganizationTypes() throws Exception {
+        Organization dept = organizations.save(new Organization("학과-" + tag, OrganizationType.DEPARTMENT));
+        CrawlSource councilBoard = sources.save(new CrawlSource("mix-c-" + tag, council, "https://example.com/c"));
+        CrawlSource deptBoard = sources.save(new CrawlSource("mix-d-" + tag, dept, "https://example.com/d"));
+        Instant day = Instant.now().minus(Duration.ofDays(1)).truncatedTo(java.time.temporal.ChronoUnit.DAYS);
+        // 한 게시판씩 몰아서 수집된 상황
+        for (int i = 0; i < 3; i++) {
+            crawled.save(new CrawledNotice(councilBoard, "c" + i, "섞기" + tag, "https://example.com/c" + i, false, day, day));
+        }
+        for (int i = 0; i < 3; i++) {
+            crawled.save(new CrawledNotice(deptBoard, "d" + i, "섞기" + tag, "https://example.com/d" + i, false, day, day));
+        }
+
+        String body = mvc.perform(get("/api/feed").param("q", "섞기" + tag)).andExpect(status().isOk()).andReturn()
+                .getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        List<String> types = new java.util.ArrayList<>();
+        json.readTree(body).get("items").forEach(item -> types.add(item.get("organization").get("type").asText()));
+        assertThat(types).hasSize(6);
+        for (int i = 1; i < types.size(); i++) {
+            assertThat(types.get(i)).as("index %d", i).isNotEqualTo(types.get(i - 1));
+        }
+    }
+
+    @Test
+    void categoryInterestOnlyPullsUniversityNoticesIntoForMe() throws Exception {
+        String code = jdbc.queryForObject("SELECT code FROM categories WHERE id = 10", String.class);
+        Organization school = organizations.save(new Organization("학교-" + tag, OrganizationType.UNIVERSITY));
+        Organization dept = organizations.save(new Organization("무관학과-" + tag, OrganizationType.DEPARTMENT));
+        CrawlSource schoolBoard = sources.save(new CrawlSource("cat-s-" + tag, school, "https://example.com/s"));
+        CrawlSource deptBoard = sources.save(new CrawlSource("cat-d-" + tag, dept, "https://example.com/d"));
+        CrawledNotice schoolNotice = new CrawledNotice(schoolBoard, "s", "학교취업 " + tag, "https://example.com/s1", false,
+                Instant.now(), Instant.now());
+        schoolNotice.assignCategory(code);
+        crawled.save(schoolNotice);
+        CrawledNotice deptNotice = new CrawledNotice(deptBoard, "d", "학과취업 " + tag, "https://example.com/d1", false,
+                Instant.now(), Instant.now());
+        deptNotice.assignCategory(code);
+        crawled.save(deptNotice);
+        mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("nickname", "민지", "organizationIds", List.of(),
+                                "categoryIds", List.of(10)))))
+                .andExpect(status().isOk());
+
+        String body = mvc.perform(get("/api/feed/for-me").param("size", "100").header("Authorization", studentToken()))
+                .andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(body).contains("학교취업 " + tag).doesNotContain("학과취업 " + tag);
+    }
+
+    @Test
     void adminCannotTouchAnotherOrganizationsNotice() throws Exception {
         long id = createNotice(admin, Map.of()).get("id").asLong();
 
