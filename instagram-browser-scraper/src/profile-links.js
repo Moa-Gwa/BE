@@ -6,7 +6,7 @@ export async function collectProfilePostLinksSince(page, since, readDate) {
     const cutoff = Date.parse(`${since}T00:00:00+09:00`);
     if (!Number.isFinite(cutoff)) throw new Error('since must be a valid YYYY-MM-DD date');
     const seen = new Set(), links = [];
-    let older = 0, unchanged = 0;
+    let older = 0, unchanged = 0, unreadable = 0, dated = 0;
     await waitForProfilePostLinks(page, 1);
     for (let scroll = 0; scroll < 500; scroll += 1) {
         const visible = await page.locator('a[href]').evaluateAll(anchors => anchors.map(a => a.getAttribute('href')));
@@ -15,15 +15,22 @@ export async function collectProfilePostLinksSince(page, since, readDate) {
             unchanged += 1;
             if (unchanged >= 10) {
                 if (seen.size === 0) throw new Error('No Instagram posts rendered');
+                if (dated === 0) throw new Error('Could not read any publication date');
                 return links;
             }
         } else unchanged = 0;
         for (const link of batch) {
             seen.add(link.externalId);
-            const publishedAt = await readDate(link.url);
-            if (!publishedAt || !Number.isFinite(Date.parse(publishedAt))) {
-                throw new Error(`Could not read publication date for ${link.externalId}`);
+            const publishedAt = await readDateWithRetry(readDate, link.url);
+            if (!publishedAt) {
+                // 한 게시물 때문에 학과 전체가 실패하지 않게 건너뜀. 저장되지 않으므로 다음 실행에서 다시 시도됨
+                // 연속 실패는 세션 만료나 화면 구조 변경일 수 있어 학과를 실패 처리함
+                if (++unreadable >= 3) throw new Error(`Could not read publication date for ${link.externalId}`);
+                console.error(`Skipping ${link.externalId}: publication date unreadable`);
+                continue;
             }
+            unreadable = 0;
+            dated += 1;
             if (Date.parse(publishedAt) >= cutoff) {
                 links.push(link);
                 older = 0;
@@ -34,6 +41,14 @@ export async function collectProfilePostLinksSince(page, since, readDate) {
         await page.waitForTimeout(1500);
     }
     throw new Error('Profile scan exceeded safety timeout before reaching the requested date');
+}
+
+async function readDateWithRetry(readDate, url) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        const value = await readDate(url);
+        if (value && Number.isFinite(Date.parse(value))) return value;
+    }
+    return null;
 }
 
 export async function readPostPublishedAt(context, url) {

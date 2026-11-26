@@ -20,10 +20,33 @@ test('date scan skips older pinned posts, includes cutoff day and scrolls beyond
     assert.equal(scroll, 1);
 });
 
-test('date scan fails rather than silently skipping a post with unknown publication date', async () => {
+test('date scan fails when no publication date can be read at all', async () => {
     const { collectProfilePostLinksSince } = await import('../src/profile-links.js');
-    const page = {locator: () => ({evaluateAll: async () => ['/p/UNKNOWN/']}), waitForTimeout: async () => {}};
+    const page = {locator: () => ({evaluateAll: async () => ['/p/UNKNOWN/']}), waitForTimeout: async () => {}, evaluate: async () => {}};
     await assert.rejects(collectProfilePostLinksSince(page, '2026-10-06', async () => null), /publication date/);
+});
+
+test('date scan retries once, then skips a single unreadable post and keeps the rest', async () => {
+    const { collectProfilePostLinksSince } = await import('../src/profile-links.js');
+    const urls = ['/p/NEW_A/', '/p/BROKEN/', '/p/NEW_B/', '/p/OLD_1/', '/p/OLD_2/', '/p/OLD_3/', '/p/OLD_4/'];
+    const page = {locator: () => ({evaluateAll: async () => urls}), waitForTimeout: async () => {}, evaluate: async () => {}};
+    const calls = {};
+    const links = await collectProfilePostLinksSince(page, '2026-11-16', async url => {
+        const code = url.match(/\/p\/([^/]+)/)[1];
+        calls[code] = (calls[code] ?? 0) + 1;
+        if (code === 'BROKEN') return null;
+        return code.startsWith('NEW') ? '2026-11-20T00:00:00Z' : '2026-11-01T00:00:00Z';
+    });
+    assert.deepEqual(links.map(link => link.externalId), ['NEW_A', 'NEW_B']);
+    assert.equal(calls.BROKEN, 2);
+});
+
+test('date scan fails after three unreadable posts in a row', async () => {
+    const { collectProfilePostLinksSince } = await import('../src/profile-links.js');
+    const urls = ['/p/OK/', '/p/X1/', '/p/X2/', '/p/X3/'];
+    const page = {locator: () => ({evaluateAll: async () => urls}), waitForTimeout: async () => {}, evaluate: async () => {}};
+    await assert.rejects(collectProfilePostLinksSince(page, '2026-11-16',
+        async url => url.includes('/OK/') ? '2026-11-20T00:00:00Z' : null), /publication date for X3/);
 });
 
 test('normalizes Instagram profile post links', () => {
