@@ -28,6 +28,18 @@ class FeedRepository {
               LEFT JOIN bookmarks b ON b.user_id = CAST(:viewer AS bigint) AND b.source = f.source AND b.notice_id = f.id
             """;
 
+    /** 학생(:me)의 주전공, 관심 학과/단체, 필수 기관, 관심 카테고리 공지 */
+    private static final String INTEREST = """
+            (f.organization_id IN (
+                SELECT primary_department_id FROM users WHERE id = :me AND primary_department_id IS NOT NULL
+                UNION SELECT target_id FROM user_interests
+                       WHERE user_id = :me AND kind IN ('DEPARTMENT', 'ORGANIZATION')
+                UNION SELECT id FROM organizations WHERE is_required)
+             OR f.category IN (
+                SELECT c.code FROM user_interests ui JOIN categories c ON c.id = ui.target_id
+                 WHERE ui.user_id = :me AND ui.kind = 'CATEGORY'))
+            """;
+
     private static final RowMapper<FeedItem> MAPPER = FeedRepository::map;
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -67,16 +79,7 @@ class FeedRepository {
             p.addValue("q", "%" + escapeLike(f.q().trim()) + "%");
         }
         if (f.forUserId() != null) {
-            where.add("""
-                    (f.organization_id IN (
-                        SELECT primary_department_id FROM users WHERE id = :me AND primary_department_id IS NOT NULL
-                        UNION SELECT target_id FROM user_interests
-                               WHERE user_id = :me AND kind IN ('DEPARTMENT', 'ORGANIZATION')
-                        UNION SELECT id FROM organizations WHERE is_required)
-                     OR f.category IN (
-                        SELECT c.code FROM user_interests ui JOIN categories c ON c.id = ui.target_id
-                         WHERE ui.user_id = :me AND ui.kind = 'CATEGORY'))
-                    """);
+            where.add(INTEREST);
             p.addValue("me", f.forUserId());
         }
         String sql = SELECT
@@ -102,15 +105,21 @@ class FeedRepository {
         return jdbc.query(sql, p, MAPPER);
     }
 
-    /** Time-sensitive manual notices: urgent, ongoing, closing soon, today's events, then the coming week. */
+    /**
+     * 학내 NOW. 긴급 공지는 모두에게, 진행 중/마감 임박/7일 안 행사는 로그인 학생의 관심 공지만 보여줌.
+     * 비로그인은 긴급 공지만.
+     */
     List<FeedItem> now(Long viewerId, int limit) {
         String sql = SELECT + """
-                 WHERE f.source = 'MANUAL'
-                   AND (f.display_status IS NULL OR f.display_status NOT IN ('CLOSED', 'ENDED'))
-                   AND (f.is_urgent
-                        OR f.display_status IN ('ONGOING', 'DEADLINE_SOON')
-                        OR (f.event_start_at IS NOT NULL
-                            AND f.event_start_at < now() + interval '7 days'))
+                 WHERE (f.display_status IS NULL OR f.display_status NOT IN ('CLOSED', 'ENDED'))
+                   AND ((f.source = 'MANUAL' AND f.is_urgent)
+                        OR (CAST(:me AS bigint) IS NOT NULL
+                            AND (f.display_status = 'DEADLINE_SOON'
+                                 -- 크롤링 공지는 종료일이 없으면 시작 뒤 계속 ONGOING이라 종료일이 있는 것만
+                                 OR (f.display_status = 'ONGOING' AND (f.source = 'MANUAL' OR f.event_end_at IS NOT NULL))
+                                 OR (f.event_start_at >= now() AND f.event_start_at < now() + interval '7 days'))
+                            AND """ + INTEREST + """
+                        ))
                  ORDER BY CASE
                             WHEN f.is_urgent THEN 0
                             WHEN f.display_status = 'ONGOING' THEN 1
@@ -121,8 +130,8 @@ class FeedRepository {
                           COALESCE(f.deadline_at, f.event_start_at), f.published_at DESC
                  LIMIT :limit
                 """;
-        return jdbc.query(sql, new MapSqlParameterSource().addValue("viewer", viewerId).addValue("limit", limit),
-                MAPPER);
+        return jdbc.query(sql, new MapSqlParameterSource().addValue("viewer", viewerId)
+                .addValue("me", viewerId, java.sql.Types.BIGINT).addValue("limit", limit), MAPPER);
     }
 
     /** 단체가 직접 올린 공지 전체와, 로그인한 학생이 저장한 공지(출처 무관)의 마감·행사 일정 */
