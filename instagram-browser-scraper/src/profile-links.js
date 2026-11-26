@@ -42,6 +42,8 @@ export async function readPostPublishedAt(context, url) {
         const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
         if (response?.status() === 429) throw new Error('INSTAGRAM_RATE_LIMIT: pause before retrying');
         await page.locator('meta[property="og:description"]').waitFor({ state: 'attached', timeout: 10_000 });
+        // 게시일 time 태그는 하이드레이션 후에 붙음. 없으면 HTML의 taken_at으로 대체
+        await page.locator('time[datetime]').first().waitFor({ state: 'attached', timeout: 10_000 }).catch(() => {});
         const datetime = await page.evaluate(() => document.querySelector('time[datetime]')?.getAttribute('datetime'));
         return extractPublishedAt(datetime, await page.content(), shortcodeFromUrl(url));
     } finally {
