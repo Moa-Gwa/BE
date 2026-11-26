@@ -180,6 +180,33 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void categoryInterestOnlyPullsUniversityNoticesIntoForMe() throws Exception {
+        String code = jdbc.queryForObject("SELECT code FROM categories WHERE id = 10", String.class);
+        Organization school = organizations.save(new Organization("학교-" + tag, OrganizationType.UNIVERSITY));
+        Organization dept = organizations.save(new Organization("무관학과-" + tag, OrganizationType.DEPARTMENT));
+        CrawlSource schoolBoard = sources.save(new CrawlSource("cat-s-" + tag, school, "https://example.com/s"));
+        CrawlSource deptBoard = sources.save(new CrawlSource("cat-d-" + tag, dept, "https://example.com/d"));
+        CrawledNotice schoolNotice = new CrawledNotice(schoolBoard, "s", "학교취업 " + tag, "https://example.com/s1", false,
+                Instant.now(), Instant.now());
+        schoolNotice.assignCategory(code);
+        crawled.save(schoolNotice);
+        CrawledNotice deptNotice = new CrawledNotice(deptBoard, "d", "학과취업 " + tag, "https://example.com/d1", false,
+                Instant.now(), Instant.now());
+        deptNotice.assignCategory(code);
+        crawled.save(deptNotice);
+        mvc.perform(put("/api/me/profile").header("Authorization", studentToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("nickname", "민지", "organizationIds", List.of(),
+                                "categoryIds", List.of(10)))))
+                .andExpect(status().isOk());
+
+        String body = mvc.perform(get("/api/feed/for-me").param("size", "100").header("Authorization", studentToken()))
+                .andExpect(status().isOk()).andReturn().getResponse()
+                .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        assertThat(body).contains("학교취업 " + tag).doesNotContain("학과취업 " + tag);
+    }
+
+    @Test
     void adminCannotTouchAnotherOrganizationsNotice() throws Exception {
         long id = createNotice(admin, Map.of()).get("id").asLong();
 

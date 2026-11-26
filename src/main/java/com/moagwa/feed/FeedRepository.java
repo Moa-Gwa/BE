@@ -28,14 +28,17 @@ class FeedRepository {
               LEFT JOIN bookmarks b ON b.user_id = CAST(:viewer AS bigint) AND b.source = f.source AND b.notice_id = f.id
             """;
 
-    /** 학생(:me)의 주전공, 관심 학과/단체, 필수 기관, 관심 카테고리 공지 */
+    /**
+     * 학생(:me)의 주전공, 관심 학과/단체, 필수 기관 공지와 관심 카테고리의 학교 전체(대학) 공지.
+     * 카테고리는 학교 공지에만 적용해 관심 설정하지 않은 학과나 단체 글이 섞이지 않게 함
+     */
     private static final String INTEREST = """
             (f.organization_id IN (
                 SELECT primary_department_id FROM users WHERE id = :me AND primary_department_id IS NOT NULL
                 UNION SELECT target_id FROM user_interests
                        WHERE user_id = :me AND kind IN ('DEPARTMENT', 'ORGANIZATION')
                 UNION SELECT id FROM organizations WHERE is_required)
-             OR f.category IN (
+             OR f.organization_type = 'UNIVERSITY' AND f.category IN (
                 SELECT c.code FROM user_interests ui JOIN categories c ON c.id = ui.target_id
                  WHERE ui.user_id = :me AND ui.kind = 'CATEGORY'))
             """;
