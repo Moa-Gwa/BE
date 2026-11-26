@@ -1,6 +1,7 @@
 package com.moagwa.user;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.google.firebase.auth.FirebaseAuth;
 import com.moagwa.auth.AuthCookies;
 import com.moagwa.auth.JwtService;
 import com.moagwa.common.PrivacyRetention;
@@ -17,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
@@ -30,6 +33,7 @@ class ConsentWithdrawalTest {
     @Autowired ConsentRepository consents;
     @Autowired JwtService jwt;
     @Autowired PrivacyRetention retention;
+    @MockBean FirebaseAuth firebaseAuth;
 
     private User user(boolean consented) {
         var u = new User("DEV", UUID.randomUUID().toString(), "동의");
@@ -110,6 +114,16 @@ class ConsentWithdrawalTest {
         assertThat(count("SELECT count(*) FROM refresh_sessions WHERE principal_id = ? AND role = 'STUDENT'", id)).isZero();
         assertThat(count("SELECT count(*) FROM group_buy_payments WHERE order_id = ? AND user_id IS NULL", "o-" + id))
                 .isOne();
+    }
+
+    @Test void withdrawingGoogleStudentIsDeletedFromFirebaseAuth() throws Exception {
+        String uid = "google-" + UUID.randomUUID();
+        User u = users.save(new User("GOOGLE", uid, "구글"));
+        consents.agreeCurrent(u.getId());
+
+        mvc.perform(delete("/api/me").header("Authorization", bearer(u))).andExpect(status().isNoContent());
+
+        verify(firebaseAuth).deleteUser(uid);
     }
 
     @Test void withdrawalIsRefusedWhileHostingARecruitingGroupBuy() throws Exception {

@@ -32,6 +32,7 @@ class MeController {
 
     private final MeService service;
     private final AuthCookies cookies;
+    private final AccountUnlinker unlinker;
 
     @GetMapping("/consent")
     ConsentStatus consent(Authentication auth) {
@@ -49,8 +50,10 @@ class MeController {
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void withdraw(Authentication auth, HttpServletResponse response) {
-        service.withdraw(me(auth));
+        User u = service.withdraw(me(auth));
         cookies.clear(response);
+        // 트랜잭션 커밋 뒤에 호출해 외부 API 지연이 DB 잠금을 붙잡지 않게 함
+        unlinker.unlink(u.getAuthProvider(), u.getProviderUserId());
     }
 
     @GetMapping("/profile")

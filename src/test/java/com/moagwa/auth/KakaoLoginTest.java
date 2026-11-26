@@ -1,6 +1,7 @@
 package com.moagwa.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -63,12 +64,14 @@ class KakaoLoginTest {
 
     @Autowired MockMvc mvc;
     @Autowired UserRepository users;
+    @Autowired JwtService jwt;
 
     private static HttpServer start() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/oauth/token", exchange -> reply(exchange, tokenStatus, tokenBody));
             server.createContext("/v2/user/me", exchange -> reply(exchange, profileStatus, profileBody));
+            server.createContext("/v1/user/unlink", exchange -> reply(exchange, 200, "{}"));
             server.start();
             return server;
         } catch (IOException e) {
@@ -95,6 +98,7 @@ class KakaoLoginTest {
         registry.add("moagwa.kakao.api-url", () -> url);
         registry.add("moagwa.kakao.client-id", () -> "test-client-id");
         registry.add("moagwa.kakao.client-secret", () -> "test-client-secret");
+        registry.add("moagwa.kakao.admin-key", () -> "test-admin-key");
     }
 
     @AfterAll
@@ -187,5 +191,22 @@ class KakaoLoginTest {
     void blankCodeIsRejectedBeforeCallingKakao() throws Exception {
         login(" ").andExpect(status().isBadRequest());
         assertThat(received).isEmpty();
+    }
+
+    @Test
+    void withdrawalUnlinksTheKakaoAccountWithTheAdminKey() throws Exception {
+        login("code").andExpect(status().isOk());
+        received.clear();
+
+        mvc.perform(delete("/api/me").header("Authorization", "Bearer " + jwt.issueStudent(kakaoUser().orElseThrow(), false)))
+                .andExpect(status().isNoContent());
+
+        assertThat(kakaoUser()).isEmpty();
+        assertThat(received).hasSize(1);
+        Received unlink = received.get(0);
+        assertThat(unlink.path()).isEqualTo("/v1/user/unlink");
+        assertThat(unlink.authorization()).isEqualTo("KakaoAK test-admin-key");
+        assertThat(unlink.form()).containsEntry("target_id_type", "user_id")
+                .containsEntry("target_id", String.valueOf(kakaoId));
     }
 }
