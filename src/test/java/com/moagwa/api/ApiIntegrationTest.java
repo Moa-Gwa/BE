@@ -161,9 +161,10 @@ class ApiIntegrationTest {
         CrawlSource councilBoard = sources.save(new CrawlSource("mix-c-" + tag, council, "https://example.com/c"));
         CrawlSource deptBoard = sources.save(new CrawlSource("mix-d-" + tag, dept, "https://example.com/d"));
         Instant day = Instant.now().minus(Duration.ofDays(1)).truncatedTo(java.time.temporal.ChronoUnit.DAYS);
-        // 한 게시판씩 몰아서 수집된 상황
+        // 학생회 글은 같은 날 서로 다른 시각(인스타), 학과 글은 날짜만 있는 게시판으로 한 번에 몰아서 수집된 상황
         for (int i = 0; i < 3; i++) {
-            crawled.save(new CrawledNotice(councilBoard, "c" + i, "섞기" + tag, "https://example.com/c" + i, false, day, day));
+            Instant at = day.plus(Duration.ofHours(9 + i));
+            crawled.save(new CrawledNotice(councilBoard, "c" + i, "섞기" + tag, "https://example.com/c" + i, false, at, at));
         }
         for (int i = 0; i < 3; i++) {
             crawled.save(new CrawledNotice(deptBoard, "d" + i, "섞기" + tag, "https://example.com/d" + i, false, day, day));
