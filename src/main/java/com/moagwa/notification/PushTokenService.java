@@ -2,7 +2,6 @@ package com.moagwa.notification;
 
 import com.moagwa.common.exception.ApiException;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -26,9 +25,6 @@ class PushTokenService {
     void sendTest(long user, String token) {
         if (!tokens.isRegistered(user, token)) {
             throw ApiException.notFound("이 기기는 알림 받을 기기로 등록되어 있지 않습니다. 알림을 다시 켜 주세요.");
-        }
-        if (!tokens.claimTestAttempt(user)) {
-            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "테스트 알림은 1분에 한 번만 보낼 수 있습니다.");
         }
         pushSender.sendTest(token);
     }

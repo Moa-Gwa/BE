@@ -19,11 +19,6 @@ import com.moagwa.auth.JwtService;
 import com.moagwa.user.User;
 import com.moagwa.user.UserRepository;
 import java.util.UUID;
-import java.util.ArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -98,59 +93,11 @@ class PushTestSendTest {
     }
 
     @Test
-    void rateLimitIsPerUserAcrossTokensAndAllowsSendingAfterOneMinute() throws Exception {
-        call(post("/api/me/push-tokens/test"), me, token).andExpect(status().isNoContent());
-        String secondToken = token + "-second";
-        call(put("/api/me/push-tokens"), me, secondToken).andExpect(status().isNoContent());
-        call(post("/api/me/push-tokens/test"), me, secondToken).andExpect(status().isTooManyRequests());
-
-        String otherToken = token + "-other";
-        call(put("/api/me/push-tokens"), other, otherToken).andExpect(status().isNoContent());
-        call(post("/api/me/push-tokens/test"), other, otherToken).andExpect(status().isNoContent());
-
-        jdbc.update("UPDATE push_test_attempts SET attempted_at = clock_timestamp() - INTERVAL '61 seconds' WHERE user_id = ?",
-                me.getId());
-        call(post("/api/me/push-tokens/test"), me, secondToken).andExpect(status().isNoContent());
-        verify(messaging, times(3)).send(any(Message.class));
-    }
-
-    @Test
-    void failedSendStillConsumesTheInterval() throws Exception {
-        FirebaseMessagingException unavailable = mock(FirebaseMessagingException.class);
-        when(unavailable.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNAVAILABLE);
-        when(messaging.send(any(Message.class))).thenThrow(unavailable);
-
-        call(post("/api/me/push-tokens/test"), me, token).andExpect(status().isBadGateway());
-        call(post("/api/me/push-tokens/test"), me, token).andExpect(status().isTooManyRequests());
-        verify(messaging).send(any(Message.class));
-    }
-
-    @Test
-    void concurrentRequestsOnlySendOnce() throws Exception {
-        var pool = Executors.newFixedThreadPool(6);
-        var ready = new CountDownLatch(6);
-        var start = new CountDownLatch(1);
-        var results = new ArrayList<Future<Integer>>();
-        try {
-            for (int i = 0; i < 6; i++) {
-                results.add(pool.submit(() -> {
-                    ready.countDown();
-                    if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("start timed out");
-                    return call(post("/api/me/push-tokens/test"), me, token)
-                            .andReturn().getResponse().getStatus();
-                }));
-            }
-            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
-            start.countDown();
-            var statuses = new ArrayList<Integer>();
-            for (var result : results) statuses.add(result.get(20, TimeUnit.SECONDS));
-            assertThat(statuses).containsOnly(204, 429);
-            assertThat(statuses.stream().filter(status -> status == 204).count()).isEqualTo(1);
-            verify(messaging).send(any(Message.class));
-        } finally {
-            start.countDown();
-            pool.shutdownNow();
+    void testPushCanBeSentRepeatedlyWithoutWaiting() throws Exception {
+        for (int i = 0; i < 3; i++) {
+            call(post("/api/me/push-tokens/test"), me, token).andExpect(status().isNoContent());
         }
+        verify(messaging, times(3)).send(any(Message.class));
     }
 
     private ResultActions call(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder req,
