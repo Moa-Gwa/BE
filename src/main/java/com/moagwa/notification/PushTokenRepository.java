@@ -29,13 +29,4 @@ class PushTokenRepository {
                 "SELECT EXISTS (SELECT 1 FROM device_tokens WHERE token = :t AND user_id = :u)",
                 new MapSqlParameterSource().addValue("t", token).addValue("u", user), Boolean.class));
     }
-
-    /** 단일 UPSERT로 여러 서버·동시 요청에서도 사용자당 1분에 한 번만 true */
-    boolean claimTestAttempt(long user) {
-        return jdbc.update("""
-                INSERT INTO push_test_attempts (user_id, attempted_at) VALUES (:u, clock_timestamp())
-                ON CONFLICT (user_id) DO UPDATE SET attempted_at = clock_timestamp()
-                WHERE push_test_attempts.attempted_at <= clock_timestamp() - INTERVAL '1 minute'
-                """, new MapSqlParameterSource("u", user)) > 0;
-    }
 }

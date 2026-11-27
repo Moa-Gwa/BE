@@ -6,6 +6,7 @@ import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.SendResponse;
+import com.google.firebase.messaging.WebpushConfig;
 import com.moagwa.common.exception.ApiException;
 import java.util.ArrayList;
 import java.util.List;
@@ -102,6 +103,11 @@ class PushSender {
                 .putData("title", title)
                 .putData("body", body == null ? "" : body)
                 .putData("url", url)
+                // 웹 푸시 기본 우선순위는 normal이라 안드로이드 절전(Doze) 중에는 늦게 오거나 버려짐
+                .setWebpushConfig(WebpushConfig.builder()
+                        .putHeader("Urgency", "high")
+                        .putHeader("TTL", "86400")
+                        .build())
                 .build();
     }
 
