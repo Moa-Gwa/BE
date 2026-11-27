@@ -183,10 +183,12 @@ class FeedRepository {
             case "event" -> "(CASE WHEN f.event_start_at >= now() THEN 0 ELSE 1 END), f.event_start_at ASC NULLS LAST, "
                     + "f.published_at DESC";
             case "popular" -> "f.view_count DESC, f.published_at DESC, f.id DESC";
-            // 게시판 공지는 시각 없이 날짜만 있어 같은 날 글이 한 게시판씩 몰림. 게시일이 같으면 기관 종류를 번갈아 섞음
-            default -> "f.published_at DESC, "
-                    + "row_number() OVER (PARTITION BY f.published_at, f.organization_type ORDER BY f.source, f.id DESC), "
-                    + "f.organization_type, f.source, f.id DESC";
+            // 게시판 공지는 날짜만 있고 인스타 글은 시각까지 있어 같은 날 글이 종류별로 몰림.
+            // 같은 날(KST) 안에서는 기관 종류를 번갈아 섞고, 종류 안에서는 최신순
+            default -> "(f.published_at AT TIME ZONE 'Asia/Seoul')::date DESC, "
+                    + "row_number() OVER (PARTITION BY (f.published_at AT TIME ZONE 'Asia/Seoul')::date, "
+                    + "f.organization_type ORDER BY f.published_at DESC, f.source, f.id DESC), "
+                    + "f.organization_type, f.published_at DESC, f.source, f.id DESC";
         };
     }
 
